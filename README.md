@@ -1,3 +1,8 @@
+## Modifications in the fork
+- [Make the package importable (remove main fn, rename the pkg)](https://github.com/keboola/go-oauth2-proxy/commit/789f4d1f85c8d2257b614c154407b1058d9d0c8a)
+
+------
+
 ![OAuth2 Proxy](/docs/static/img/logos/OAuth2_Proxy_horizontal.svg)
 
 [![Continuous Integration](https://github.com/oauth2-proxy/oauth2-proxy/actions/workflows/ci.yaml/badge.svg)](https://github.com/oauth2-proxy/oauth2-proxy/actions/workflows/ci.yaml)
