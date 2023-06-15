@@ -1,4 +1,4 @@
-package main
+package oauthproxy
 
 import (
 	"encoding/csv"

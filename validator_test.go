@@ -1,11 +1,9 @@
-package main
+package oauthproxy
 
 import (
 	"os"
 	"strings"
 	"testing"
-
-	. "github.com/onsi/gomega"
 )
 
 type ValidatorTest struct {
