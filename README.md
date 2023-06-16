@@ -1,5 +1,6 @@
 ## Modifications in the fork
 - [Make the package importable (remove main fn, rename the pkg)](https://github.com/keboola/go-oauth2-proxy/commit/789f4d1f85c8d2257b614c154407b1058d9d0c8a)
+- [Added ability to add a custom middleware](https://github.com/keboola/go-oauth2-proxy/commit/bf4d486c80855a85ee956aee14c6cf3ef4d85407)
 
 ------
 
