@@ -240,6 +240,10 @@ func NewOAuthProxy(opts *options.Options, validator func(string) bool) (*OAuthPr
 	return p, nil
 }
 
+func (p *OAuthProxy) Use(mwf ...mux.MiddlewareFunc) {
+	p.serveMux.Use(mwf...)
+}
+
 func (p *OAuthProxy) Start() error {
 	if p.server == nil {
 		// We have to call setupServer before Start is called.
