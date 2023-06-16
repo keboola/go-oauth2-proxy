@@ -147,6 +147,8 @@ func NewOAuthProxy(opts *options.Options, validator func(string) bool) (*OAuthPr
 		return nil, fmt.Errorf("error initialising upstream proxy: %v", err)
 	}
 
+	upstreamProxy = opts.UpstreamChain.Then(upstreamProxy)
+
 	if opts.SkipJwtBearerTokens {
 		logger.Printf("Skipping JWT tokens from configured OIDC issuer: %q", opts.Providers[0].OIDCConfig.IssuerURL)
 		for _, issuer := range opts.ExtraJwtIssuers {

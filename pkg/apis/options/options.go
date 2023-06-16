@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"net/url"
 
+	"github.com/justinas/alice"
 	ipapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/ip"
 	internaloidc "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/providers/oidc"
 	"github.com/spf13/pflag"
@@ -42,6 +43,7 @@ type Options struct {
 	// Not used in the legacy config, name not allowed to match an external key (upstreams)
 	// TODO(JoelSpeed): Rename when legacy config is removed
 	UpstreamServers UpstreamConfig `cfg:",internal"`
+	UpstreamChain   alice.Chain
 
 	InjectRequestHeaders  []Header `cfg:",internal"`
 	InjectResponseHeaders []Header `cfg:",internal"`
