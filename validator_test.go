@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	. "github.com/onsi/gomega"
 )
 
 type ValidatorTest struct {
