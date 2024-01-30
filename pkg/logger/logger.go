@@ -183,6 +183,9 @@ func (l *Logger) Output(lvl Level, calldepth int, message string) {
 // log request details. Remaining arguments are handled in the manner of
 // fmt.Sprintf. Writes a final newline to the end of every message.
 func (l *Logger) PrintAuthf(username string, req *http.Request, status AuthStatus, format string, a ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	if !l.authEnabled {
 		return
 	}
@@ -194,9 +197,6 @@ func (l *Logger) PrintAuthf(username string, req *http.Request, status AuthStatu
 	}
 
 	client := l.getClientFunc(req)
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
 
 	scope := middlewareapi.GetRequestScope(req)
 	err := l.authTemplate.Execute(l.writer, authLogMessageData{
@@ -225,6 +225,9 @@ func (l *Logger) PrintAuthf(username string, req *http.Request, status AuthStatu
 // url, and timestamp of the request.  Writes a final newline to the end
 // of every message.
 func (l *Logger) PrintReq(username, upstream string, req *http.Request, url url.URL, ts time.Time, status int, size int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	if !l.reqEnabled {
 		return
 	}
@@ -250,9 +253,6 @@ func (l *Logger) PrintReq(username, upstream string, req *http.Request, url url.
 	}
 
 	client := l.getClientFunc(req)
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
 
 	scope := middlewareapi.GetRequestScope(req)
 	err := l.reqTemplate.Execute(l.writer, reqLogMessageData{
