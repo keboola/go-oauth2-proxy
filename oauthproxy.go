@@ -997,6 +997,11 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (p *OAuthProxy) NeedsLogin(rw http.ResponseWriter, req *http.Request) bool {
+	_, err := p.getAuthenticatedSession(rw, req)
+	return err == ErrNeedsLogin
+}
+
 // See https://developers.google.com/web/fundamentals/performance/optimizing-content-efficiency/http-caching?hl=en
 var noCacheHeaders = map[string]string{
 	"Expires":         time.Unix(0, 0).Format(time.RFC1123),
