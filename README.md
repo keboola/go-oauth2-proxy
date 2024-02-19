@@ -2,6 +2,18 @@
 - [Make the package importable (remove main fn, rename the pkg)](https://github.com/keboola/go-oauth2-proxy/commit/789f4d1f85c8d2257b614c154407b1058d9d0c8a)
 - [Added ability to add a custom middleware](https://github.com/keboola/go-oauth2-proxy/commit/bf4d486c80855a85ee956aee14c6cf3ef4d85407)
 - [Added middlewares chain for upstream handler](https://github.com/keboola/go-oauth2-proxy/commit/c74325648bd7364d829cd9464fe2b6488bfbb260)
+- [Moved some locks to prevent race detections](https://github.com/keboola/go-oauth2-proxy/commit/d4f9ab6b7147eb9d34be4441ce50db2d61c4d0f2)
+
+## Fork maintenance
+
+In order to update this fork to a new version of the base repository follow these steps:
+
+- Create a new branch from our `master` branch
+- Merge latest tag from upstream and fix conflicts
+- Send a PR to this repository (not upstream)
+- Fix potential pipeline issues and ask for review
+
+After merging, change the required version in `go.mod` to `master` and run `go mod tidy` and `go mod vendor`. Double check if it updated to the intended commit. Try [disabling Go Proxy](https://webtips.fly.dev/how-to-disable-go-proxy/) if the commit is [incorrect](https://proxy.golang.org/#faq-new-version).
 
 ------
 
