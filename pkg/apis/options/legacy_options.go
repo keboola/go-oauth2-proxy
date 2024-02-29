@@ -176,6 +176,8 @@ func (l *LegacyUpstreams) convert() (UpstreamConfig, error) {
 			upstream.ProxyWebSockets = nil
 			upstream.FlushInterval = nil
 			upstream.Timeout = nil
+		case "unix":
+			upstream.Path = "/"
 		}
 
 		upstreams.Upstreams = append(upstreams.Upstreams, upstream)
@@ -500,12 +502,14 @@ type LegacyProvider struct {
 	GoogleAdminEmail                       string   `flag:"google-admin-email" cfg:"google_admin_email"`
 	GoogleServiceAccountJSON               string   `flag:"google-service-account-json" cfg:"google_service_account_json"`
 	GoogleUseApplicationDefaultCredentials bool     `flag:"google-use-application-default-credentials" cfg:"google_use_application_default_credentials"`
+	GoogleTargetPrincipal                  string   `flag:"google-target-principal" cfg:"google_target_principal"`
 
 	// These options allow for other providers besides Google, with
 	// potential overrides.
 	ProviderType                       string   `flag:"provider" cfg:"provider"`
 	ProviderName                       string   `flag:"provider-display-name" cfg:"provider_display_name"`
 	ProviderCAFiles                    []string `flag:"provider-ca-file" cfg:"provider_ca_files"`
+	UseSystemTrustStore                bool     `flag:"use-system-trust-store" cfg:"use_system_trust_store"`
 	OIDCIssuerURL                      string   `flag:"oidc-issuer-url" cfg:"oidc_issuer_url"`
 	InsecureOIDCAllowUnverifiedEmail   bool     `flag:"insecure-oidc-allow-unverified-email" cfg:"insecure_oidc_allow_unverified_email"`
 	InsecureOIDCSkipIssuerVerification bool     `flag:"insecure-oidc-skip-issuer-verification" cfg:"insecure_oidc_skip_issuer_verification"`
@@ -519,6 +523,7 @@ type LegacyProvider struct {
 	LoginURL                           string   `flag:"login-url" cfg:"login_url"`
 	RedeemURL                          string   `flag:"redeem-url" cfg:"redeem_url"`
 	ProfileURL                         string   `flag:"profile-url" cfg:"profile_url"`
+	SkipClaimsFromProfileURL           bool     `flag:"skip-claims-from-profile-url" cfg:"skip_claims_from_profile_url"`
 	ProtectedResource                  string   `flag:"resource" cfg:"resource"`
 	ValidateURL                        string   `flag:"validate-url" cfg:"validate_url"`
 	Scope                              string   `flag:"scope" cfg:"scope"`
@@ -527,6 +532,7 @@ type LegacyProvider struct {
 	UserIDClaim                        string   `flag:"user-id-claim" cfg:"user_id_claim"`
 	AllowedGroups                      []string `flag:"allowed-group" cfg:"allowed_groups"`
 	AllowedRoles                       []string `flag:"allowed-role" cfg:"allowed_roles"`
+	BackendLogoutURL                   string   `flag:"backend-logout-url" cfg:"backend_logout_url"`
 
 	AcrValues  string `flag:"acr-values" cfg:"acr_values"`
 	JWTKey     string `flag:"jwt-key" cfg:"jwt_key"`
@@ -560,6 +566,7 @@ func legacyProviderFlagSet() *pflag.FlagSet {
 	flagSet.String("provider", "google", "OAuth provider")
 	flagSet.String("provider-display-name", "", "Provider display name")
 	flagSet.StringSlice("provider-ca-file", []string{}, "One or more paths to CA certificates that should be used when connecting to the provider.  If not specified, the default Go trust sources are used instead.")
+	flagSet.Bool("use-system-trust-store", false, "Determines if 'provider-ca-file' files and the system trust store are used. If set to true, your custom CA files and the system trust store are used otherwise only your custom CA files.")
 	flagSet.String("oidc-issuer-url", "", "OpenID Connect issuer URL (ie: https://accounts.google.com)")
 	flagSet.Bool("insecure-oidc-allow-unverified-email", false, "Don't fail if an email address in an id_token is not verified")
 	flagSet.Bool("insecure-oidc-skip-issuer-verification", false, "Do not verify if issuer matches OIDC discovery URL")
@@ -573,6 +580,7 @@ func legacyProviderFlagSet() *pflag.FlagSet {
 	flagSet.String("login-url", "", "Authentication endpoint")
 	flagSet.String("redeem-url", "", "Token redemption endpoint")
 	flagSet.String("profile-url", "", "Profile access endpoint")
+	flagSet.Bool("skip-claims-from-profile-url", false, "Skip loading missing claims from profile URL")
 	flagSet.String("resource", "", "The resource that is protected (Azure AD only)")
 	flagSet.String("validate-url", "", "Access token validation endpoint")
 	flagSet.String("scope", "", "OAuth scope specification")
@@ -589,6 +597,7 @@ func legacyProviderFlagSet() *pflag.FlagSet {
 	flagSet.String("user-id-claim", OIDCEmailClaim, "(DEPRECATED for `oidc-email-claim`) which claim contains the user ID")
 	flagSet.StringSlice("allowed-group", []string{}, "restrict logins to members of this group (may be given multiple times)")
 	flagSet.StringSlice("allowed-role", []string{}, "(keycloak-oidc) restrict logins to members of these roles (may be given multiple times)")
+	flagSet.String("backend-logout-url", "", "url to perform a backend logout, {id_token} can be used as placeholder for the id_token")
 
 	return flagSet
 }
@@ -600,6 +609,7 @@ func legacyGoogleFlagSet() *pflag.FlagSet {
 	flagSet.String("google-admin-email", "", "the google admin to impersonate for api calls")
 	flagSet.String("google-service-account-json", "", "the path to the service account json credentials")
 	flagSet.String("google-use-application-default-credentials", "", "use application default credentials instead of service account json (i.e. GKE Workload Identity)")
+	flagSet.String("google-target-principal", "", "the target principal to impersonate when using ADC")
 
 	return flagSet
 }
@@ -652,19 +662,22 @@ func (l *LegacyProvider) convert() (Providers, error) {
 	providers := Providers{}
 
 	provider := Provider{
-		ClientID:            l.ClientID,
-		ClientSecret:        l.ClientSecret,
-		ClientSecretFile:    l.ClientSecretFile,
-		Type:                ProviderType(l.ProviderType),
-		CAFiles:             l.ProviderCAFiles,
-		LoginURL:            l.LoginURL,
-		RedeemURL:           l.RedeemURL,
-		ProfileURL:          l.ProfileURL,
-		ProtectedResource:   l.ProtectedResource,
-		ValidateURL:         l.ValidateURL,
-		Scope:               l.Scope,
-		AllowedGroups:       l.AllowedGroups,
-		CodeChallengeMethod: l.CodeChallengeMethod,
+		ClientID:                 l.ClientID,
+		ClientSecret:             l.ClientSecret,
+		ClientSecretFile:         l.ClientSecretFile,
+		Type:                     ProviderType(l.ProviderType),
+		CAFiles:                  l.ProviderCAFiles,
+		UseSystemTrustStore:      l.UseSystemTrustStore,
+		LoginURL:                 l.LoginURL,
+		RedeemURL:                l.RedeemURL,
+		ProfileURL:               l.ProfileURL,
+		SkipClaimsFromProfileURL: l.SkipClaimsFromProfileURL,
+		ProtectedResource:        l.ProtectedResource,
+		ValidateURL:              l.ValidateURL,
+		Scope:                    l.Scope,
+		AllowedGroups:            l.AllowedGroups,
+		CodeChallengeMethod:      l.CodeChallengeMethod,
+		BackendLogoutURL:         l.BackendLogoutURL,
 	}
 
 	// This part is out of the switch section for all providers that support OIDC
@@ -741,6 +754,7 @@ func (l *LegacyProvider) convert() (Providers, error) {
 			AdminEmail:                       l.GoogleAdminEmail,
 			ServiceAccountJSON:               l.GoogleServiceAccountJSON,
 			UseApplicationDefaultCredentials: l.GoogleUseApplicationDefaultCredentials,
+			TargetPrincipal:                  l.GoogleTargetPrincipal,
 		}
 	}
 
