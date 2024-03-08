@@ -141,6 +141,9 @@ func (c *csrf) SetCookie(rw http.ResponseWriter, req *http.Request) (*http.Cooki
 		c.cookieOpts.CSRFExpire,
 		c.time.Now(),
 	)
+	// Workaround for https://github.com/oauth2-proxy/oauth2-proxy/issues/1663
+	// Possible permanent solution is in https://github.com/oauth2-proxy/oauth2-proxy/pull/1947
+	cookie.SameSite = http.SameSiteNoneMode
 	http.SetCookie(rw, cookie)
 
 	return cookie, nil
