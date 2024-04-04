@@ -1,6 +1,9 @@
 package options
 
-import "time"
+import (
+	"net/http"
+	"time"
+)
 
 const (
 	// DefaultUpstreamFlushInterval is the default value for the Upstream FlushInterval.
@@ -91,4 +94,7 @@ type Upstream struct {
 	// Timeout is the maximum duration the server will wait for a response from the upstream server.
 	// Defaults to 30 seconds.
 	Timeout *Duration `json:"timeout,omitempty"`
+
+	// Transport overrides the default http transport.
+	Transport *http.Transport `json:"-"`
 }
