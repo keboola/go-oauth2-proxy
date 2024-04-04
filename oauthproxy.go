@@ -117,6 +117,10 @@ type OAuthProxy struct {
 
 // NewOAuthProxy creates a new instance of OAuthProxy from the options provided
 func NewOAuthProxy(opts *options.Options, validator func(string) bool) (*OAuthProxy, error) {
+	return NewOAuthProxyWithPageWriter(opts, validator, nil)
+}
+
+func NewOAuthProxyWithPageWriter(opts *options.Options, validator func(string) bool, pageWriter pagewriter.Writer) (*OAuthProxy, error) {
 	sessionStore, err := sessions.NewSessionStore(&opts.Session, &opts.Cookie)
 	if err != nil {
 		return nil, fmt.Errorf("error initialising session store: %v", err)
@@ -137,19 +141,21 @@ func NewOAuthProxy(opts *options.Options, validator func(string) bool) (*OAuthPr
 		return nil, fmt.Errorf("error initialising provider: %v", err)
 	}
 
-	pageWriter, err := pagewriter.NewWriter(pagewriter.Opts{
-		TemplatesPath:    opts.Templates.Path,
-		CustomLogo:       opts.Templates.CustomLogo,
-		ProxyPrefix:      opts.ProxyPrefix,
-		Footer:           opts.Templates.Footer,
-		Version:          VERSION,
-		Debug:            opts.Templates.Debug,
-		ProviderName:     buildProviderName(provider, opts.Providers[0].Name),
-		SignInMessage:    buildSignInMessage(opts),
-		DisplayLoginForm: basicAuthValidator != nil && opts.Templates.DisplayLoginForm,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("error initialising page writer: %v", err)
+	if pageWriter == nil {
+		pageWriter, err = pagewriter.NewWriter(pagewriter.Opts{
+			TemplatesPath:    opts.Templates.Path,
+			CustomLogo:       opts.Templates.CustomLogo,
+			ProxyPrefix:      opts.ProxyPrefix,
+			Footer:           opts.Templates.Footer,
+			Version:          VERSION,
+			Debug:            opts.Templates.Debug,
+			ProviderName:     buildProviderName(provider, opts.Providers[0].Name),
+			SignInMessage:    buildSignInMessage(opts),
+			DisplayLoginForm: basicAuthValidator != nil && opts.Templates.DisplayLoginForm,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error initialising page writer: %v", err)
+		}
 	}
 
 	upstreamProxy, err := upstream.NewProxy(opts.UpstreamServers, opts.GetSignatureData(), pageWriter)
