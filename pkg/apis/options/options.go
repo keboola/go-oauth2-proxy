@@ -2,6 +2,7 @@ package options
 
 import (
 	"crypto"
+	"net/http"
 	"net/url"
 
 	"github.com/justinas/alice"
@@ -43,6 +44,7 @@ type Options struct {
 
 	// Not used in the legacy config, name not allowed to match an external key (upstreams)
 	// TODO(JoelSpeed): Rename when legacy config is removed
+	UpstreamHandler http.Handler   `cfg:",internal"`
 	UpstreamServers UpstreamConfig `cfg:",internal"`
 	UpstreamChain   alice.Chain    `cfg:",internal"`
 

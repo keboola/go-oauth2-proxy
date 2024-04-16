@@ -158,9 +158,17 @@ func NewOAuthProxyWithPageWriter(opts *options.Options, validator func(string) b
 		}
 	}
 
-	upstreamProxy, err := upstream.NewProxy(opts.UpstreamServers, opts.GetSignatureData(), pageWriter)
-	if err != nil {
-		return nil, fmt.Errorf("error initialising upstream proxy: %v", err)
+	var upstreamProxy http.Handler
+	if opts.UpstreamHandler != nil {
+		upstreamProxy = opts.UpstreamHandler
+		if len(opts.UpstreamServers.Upstreams) != 0 {
+			return nil, errors.New(`UpstreamHandler and UpstreamServers configuration options are not compatible`)
+		}
+	} else {
+		upstreamProxy, err = upstream.NewProxy(opts.UpstreamServers, opts.GetSignatureData(), pageWriter)
+		if err != nil {
+			return nil, fmt.Errorf("error initialising upstream proxy: %v", err)
+		}
 	}
 
 	upstreamProxy = opts.UpstreamChain.Then(upstreamProxy)
