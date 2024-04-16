@@ -6,6 +6,7 @@
 - [Added workaround for CSRF cookie](https://github.com/keboola/go-oauth2-proxy/commit/5486c9884b2953ba1a2d4efd0c89f527953104d1)
 - [Added option to configure upstream transport](https://github.com/keboola/go-oauth2-proxy/commit/8bde35a277a8548e12e9ad01f0658da22cbf04b6)
 - [Added argument for custom error handler](https://github.com/keboola/go-oauth2-proxy/commit/f9b5f906a4f40da25437425cc4e4b5a932ca2f36) 
+- [Added option `UpstreamHandler`](https://github.com/keboola/go-oauth2-proxy/commit/2b0c2a99d50ba80b68ffba8175ebc3b9311f6496)
 
 ## Fork maintenance
 
