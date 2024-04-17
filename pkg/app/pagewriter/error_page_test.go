@@ -4,6 +4,7 @@ import (
 	"errors"
 	"html/template"
 	"io"
+	"net/http"
 	"net/http/httptest"
 
 	middlewareapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/middleware"
@@ -29,7 +30,8 @@ var _ = Describe("Error Page Writer", func() {
 	Context("WriteErrorPage", func() {
 		It("Writes the template to the response writer", func() {
 			recorder := httptest.NewRecorder()
-			errorPage.WriteErrorPage(recorder, ErrorPageOpts{
+			req := httptest.NewRequest(http.MethodGet, "https://proxy.com/path", nil)
+			errorPage.WriteErrorPage(recorder, req, ErrorPageOpts{
 				Status:      403,
 				RedirectURL: "/redirect",
 				RequestID:   testRequestID,
@@ -43,7 +45,8 @@ var _ = Describe("Error Page Writer", func() {
 
 		It("With a different code, uses the stock message for the correct code", func() {
 			recorder := httptest.NewRecorder()
-			errorPage.WriteErrorPage(recorder, ErrorPageOpts{
+			req := httptest.NewRequest(http.MethodGet, "https://proxy.com/path", nil)
+			errorPage.WriteErrorPage(recorder, req, ErrorPageOpts{
 				Status:      500,
 				RedirectURL: "/redirect",
 				RequestID:   testRequestID,
@@ -57,7 +60,8 @@ var _ = Describe("Error Page Writer", func() {
 
 		It("With a message override, uses the message", func() {
 			recorder := httptest.NewRecorder()
-			errorPage.WriteErrorPage(recorder, ErrorPageOpts{
+			req := httptest.NewRequest(http.MethodGet, "https://proxy.com/path", nil)
+			errorPage.WriteErrorPage(recorder, req, ErrorPageOpts{
 				Status:      403,
 				RedirectURL: "/redirect",
 				RequestID:   testRequestID,
@@ -75,7 +79,8 @@ var _ = Describe("Error Page Writer", func() {
 
 		It("Sanitizes malicious user input", func() {
 			recorder := httptest.NewRecorder()
-			errorPage.WriteErrorPage(recorder, ErrorPageOpts{
+			req := httptest.NewRequest(http.MethodGet, "https://proxy.com/path", nil)
+			errorPage.WriteErrorPage(recorder, req, ErrorPageOpts{
 				Status:      403,
 				RedirectURL: "/redirect",
 				RequestID:   "<script>alert(1)</script>",
@@ -115,7 +120,8 @@ var _ = Describe("Error Page Writer", func() {
 		Context("WriteErrorPage", func() {
 			It("Writes the detailed error in place of the message", func() {
 				recorder := httptest.NewRecorder()
-				errorPage.WriteErrorPage(recorder, ErrorPageOpts{
+				req := httptest.NewRequest(http.MethodGet, "https://proxy.com/path", nil)
+				errorPage.WriteErrorPage(recorder, req, ErrorPageOpts{
 					Status:      403,
 					RedirectURL: "/redirect",
 					AppError:    "Debug error",

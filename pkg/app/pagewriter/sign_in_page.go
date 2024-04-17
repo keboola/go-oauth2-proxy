@@ -83,7 +83,7 @@ func (s *signInPageWriter) WriteSignInPage(rw http.ResponseWriter, req *http.Req
 	if err != nil {
 		logger.Printf("Error rendering sign-in template: %v", err)
 		scope := middlewareapi.GetRequestScope(req)
-		s.errorPageWriter.WriteErrorPage(rw, ErrorPageOpts{
+		s.errorPageWriter.WriteErrorPage(rw, req, ErrorPageOpts{
 			Status:      http.StatusInternalServerError,
 			RedirectURL: redirectURL,
 			RequestID:   scope.RequestID,
