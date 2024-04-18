@@ -55,7 +55,7 @@ type ErrorPageOpts struct {
 // WriteErrorPage writes an error page to the given response writer.
 // It uses the passed redirectURL to give users the option to go back to where
 // they originally came from or try signing in again.
-func (e *errorPageWriter) WriteErrorPage(rw http.ResponseWriter, opts ErrorPageOpts) {
+func (e *errorPageWriter) WriteErrorPage(rw http.ResponseWriter, _ *http.Request, opts ErrorPageOpts) {
 	rw.WriteHeader(opts.Status)
 
 	// We allow unescaped template.HTML since it is user configured options
@@ -92,7 +92,7 @@ func (e *errorPageWriter) WriteErrorPage(rw http.ResponseWriter, opts ErrorPageO
 func (e *errorPageWriter) ProxyErrorHandler(rw http.ResponseWriter, req *http.Request, proxyErr error) {
 	logger.Errorf("Error proxying to upstream server: %v", proxyErr)
 	scope := middlewareapi.GetRequestScope(req)
-	e.WriteErrorPage(rw, ErrorPageOpts{
+	e.WriteErrorPage(rw, req, ErrorPageOpts{
 		Status:      http.StatusBadGateway,
 		RedirectURL: "", // The user is already logged in and has hit an upstream error. Makes no sense to redirect in this case.
 		RequestID:   scope.RequestID,

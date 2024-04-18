@@ -8,6 +8,8 @@
 - [Added argument for custom error handler](https://github.com/keboola/go-oauth2-proxy/commit/f9b5f906a4f40da25437425cc4e4b5a932ca2f36) 
 - [Added option `UpstreamHandler`](https://github.com/keboola/go-oauth2-proxy/commit/2b0c2a99d50ba80b68ffba8175ebc3b9311f6496)
 - [Added option `OnNeedsLogin`](https://github.com/keboola/go-oauth2-proxy/commit/efea780d43062f8a61c84cda65e6742835f64dbd)
+- [Added request argument to `WriteErrorPage`](https://github.com/keboola/go-oauth2-proxy/commit/757d1371618332e79bc70a6371654b740b754a26)
+
 
 ## Fork maintenance
 

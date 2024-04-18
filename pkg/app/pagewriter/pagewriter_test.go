@@ -44,7 +44,8 @@ var _ = Describe("Writer", func() {
 
 			It("Writes the default error template", func() {
 				recorder := httptest.NewRecorder()
-				writer.WriteErrorPage(recorder, ErrorPageOpts{
+				req := httptest.NewRequest(http.MethodGet, "https://proxy.com/path", nil)
+				writer.WriteErrorPage(recorder, req, ErrorPageOpts{
 					Status:      500,
 					RedirectURL: "/redirect",
 					AppError:    "Some debug error",
@@ -91,7 +92,8 @@ var _ = Describe("Writer", func() {
 
 			It("Writes the custom error template", func() {
 				recorder := httptest.NewRecorder()
-				writer.WriteErrorPage(recorder, ErrorPageOpts{
+				req := httptest.NewRequest(http.MethodGet, "https://proxy.com/path", nil)
+				writer.WriteErrorPage(recorder, req, ErrorPageOpts{
 					Status:      500,
 					RedirectURL: "/redirect",
 					AppError:    "Some debug error",
@@ -179,7 +181,8 @@ var _ = Describe("Writer", func() {
 		DescribeTable("WriteErrorPage",
 			func(in writerFuncsTableInput) {
 				rw := httptest.NewRecorder()
-				in.writer.WriteErrorPage(rw, ErrorPageOpts{
+				req := httptest.NewRequest(http.MethodGet, "https://proxy.com/path", nil)
+				in.writer.WriteErrorPage(rw, req, ErrorPageOpts{
 					Status:      http.StatusInternalServerError,
 					RedirectURL: "<redirectURL>",
 					RequestID:   "12345",

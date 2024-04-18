@@ -11,7 +11,7 @@ import (
 // upstream package.
 type Writer interface {
 	WriteSignInPage(rw http.ResponseWriter, req *http.Request, redirectURL string, statusCode int)
-	WriteErrorPage(rw http.ResponseWriter, opts ErrorPageOpts)
+	WriteErrorPage(rw http.ResponseWriter, req *http.Request, opts ErrorPageOpts)
 	ProxyErrorHandler(rw http.ResponseWriter, req *http.Request, proxyErr error)
 	WriteRobotsTxt(rw http.ResponseWriter, req *http.Request)
 }
@@ -131,7 +131,7 @@ func (w *WriterFuncs) WriteSignInPage(rw http.ResponseWriter, req *http.Request,
 // WriteErrorPage implements the Writer interface.
 // If the ErrorPageFunc is provided, this will be used, else a default
 // implementation will be used.
-func (w *WriterFuncs) WriteErrorPage(rw http.ResponseWriter, opts ErrorPageOpts) {
+func (w *WriterFuncs) WriteErrorPage(rw http.ResponseWriter, _ *http.Request, opts ErrorPageOpts) {
 	if w.ErrorPageFunc != nil {
 		w.ErrorPageFunc(rw, opts)
 		return
@@ -153,7 +153,7 @@ func (w *WriterFuncs) ProxyErrorHandler(rw http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	w.WriteErrorPage(rw, ErrorPageOpts{
+	w.WriteErrorPage(rw, req, ErrorPageOpts{
 		Status:   http.StatusBadGateway,
 		AppError: proxyErr.Error(),
 	})

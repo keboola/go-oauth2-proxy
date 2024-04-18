@@ -579,7 +579,7 @@ func (p *OAuthProxy) ErrorPage(rw http.ResponseWriter, req *http.Request, code i
 	}
 
 	scope := middlewareapi.GetRequestScope(req)
-	p.pageWriter.WriteErrorPage(rw, pagewriter.ErrorPageOpts{
+	p.pageWriter.WriteErrorPage(rw, req, pagewriter.ErrorPageOpts{
 		Status:      code,
 		RedirectURL: redirectURL,
 		RequestID:   scope.RequestID,
