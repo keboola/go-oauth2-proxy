@@ -84,6 +84,8 @@ type OAuthProxy struct {
 
 	SignInPath string
 
+	onNeedsLogin func(rw http.ResponseWriter, req *http.Request) (stop bool)
+
 	allowedRoutes        []allowedRoute
 	apiRoutes            []apiRoute
 	redirectURL          *url.URL // the url to receive requests at
@@ -232,6 +234,8 @@ func NewOAuthProxyWithPageWriter(opts *options.Options, validator func(string) b
 		Validator:     validator,
 
 		SignInPath: fmt.Sprintf("%s/sign_in", opts.ProxyPrefix),
+
+		onNeedsLogin: opts.OnNeedsLogin,
 
 		ProxyPrefix:          opts.ProxyPrefix,
 		provider:             provider,
@@ -1026,6 +1030,13 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 		p.addHeadersForProxying(rw, session)
 		p.headersChain.Then(p.upstreamProxy).ServeHTTP(rw, req)
 	case ErrNeedsLogin:
+		// invoke customized handler
+		if p.onNeedsLogin != nil {
+			if stop := p.onNeedsLogin(rw, req); stop {
+				return
+			}
+		}
+
 		// we need to send the user to a login screen
 		if p.forceJSONErrors || isAjax(req) || p.isAPIPath(req) {
 			logger.Printf("No valid authentication in request. Access Denied.")
