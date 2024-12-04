@@ -30,6 +30,7 @@ import (
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/encryption"
 	proxyhttp "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/http"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/util"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/version"
 
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/ip"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
@@ -149,7 +150,7 @@ func NewOAuthProxyWithPageWriter(opts *options.Options, validator func(string) b
 			CustomLogo:       opts.Templates.CustomLogo,
 			ProxyPrefix:      opts.ProxyPrefix,
 			Footer:           opts.Templates.Footer,
-			Version:          VERSION,
+			Version:          version.VERSION,
 			Debug:            opts.Templates.Debug,
 			ProviderName:     buildProviderName(provider, opts.Providers[0].Name),
 			SignInMessage:    buildSignInMessage(opts),
@@ -1015,7 +1016,7 @@ func (p *OAuthProxy) AuthOnly(rw http.ResponseWriter, req *http.Request) {
 
 	// we are authenticated
 	p.addHeadersForProxying(rw, session)
-	p.headersChain.Then(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+	p.headersChain.Then(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
 		rw.WriteHeader(http.StatusAccepted)
 	})).ServeHTTP(rw, req)
 }
@@ -1261,7 +1262,7 @@ func checkAllowedEmails(req *http.Request, s *sessionsapi.SessionState) bool {
 	return allowed
 }
 
-// encodedState builds the OAuth state param out of our nonce and
+// encodeState builds the OAuth state param out of our nonce and
 // original application redirect
 func encodeState(nonce string, redirect string, encode bool) string {
 	rawString := fmt.Sprintf("%v:%v", nonce, redirect)
