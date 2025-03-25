@@ -15,13 +15,13 @@ require (
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/ghodss/yaml v1.0.1-0.20220118164431-d8423dcdf344
 	github.com/go-jose/go-jose/v3 v3.0.3
+	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/justinas/alice v1.2.0
 	github.com/mbland/hmacauth v0.0.0-20170912233209-44256dfd4bfa
-	github.com/mitchellh/mapstructure v1.5.0
 	github.com/oauth2-proxy/mockoidc v0.0.0-20240214162133-caebfff84d25
 	github.com/oauth2-proxy/tools/reference-gen v0.0.0-20220223111546-d3b50d1a591a
 	github.com/onsi/ginkgo/v2 v2.21.0
@@ -58,7 +58,6 @@ require (
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/google/pprof v0.0.0-20241029153458-d1b30febd7db // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
