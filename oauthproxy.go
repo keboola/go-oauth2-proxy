@@ -181,6 +181,10 @@ func NewOAuthProxyWithPageWriter(opts *options.Options, validator func(string) b
 		for _, issuer := range opts.ExtraJwtIssuers {
 			logger.Printf("Skipping JWT tokens from extra JWT issuer: %q", issuer)
 		}
+		if !opts.BearerTokenLoginFallback {
+			logger.Println("Denying requests with invalid JWT tokens")
+		}
+
 	}
 	redirectURL := opts.GetRedirectURL()
 	if redirectURL.Path == "" {
@@ -426,7 +430,7 @@ func buildSessionChain(opts *options.Options, provider providers.Provider, sessi
 				middlewareapi.CreateTokenToSessionFunc(verifier.Verify))
 		}
 
-		chain = chain.Append(middleware.NewJwtSessionLoader(sessionLoaders))
+		chain = chain.Append(middleware.NewJwtSessionLoader(sessionLoaders, opts.BearerTokenLoginFallback))
 	}
 
 	if validator != nil {

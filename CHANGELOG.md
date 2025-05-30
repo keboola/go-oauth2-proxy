@@ -6,7 +6,60 @@
 
 ## Breaking Changes
 
+## Changes since v7.9.0
+
+# V7.9.0
+
+## Release Highlights
+- 📨 OAuth 2.0 Multiple Response Type Encoding
+- 📦️ Support for JWT encoded profile claims
+- 🔵 Golang version upgrade to v1.23.8
+- 🕵️‍♀️ Vulnerabilities have been addressed
+  - [CVE-2025-22871](https://github.com/advisories/GHSA-g9pc-8g42-g6vq)
+- 🐛 Squashed some bugs
+  
+## Important Notes
+
+## Breaking Changes
+
+## Changes since v7.8.2
+
+- [#3031](https://github.com/oauth2-proxy/oauth2-proxy/pull/3031) Fixes Refresh Token bug with Entra ID and Workload Identity (#3027)[https://github.com/oauth2-proxy/oauth2-proxy/issues/3028] by using client assertion when redeeming the token (@richard87)
+- [#3001](https://github.com/oauth2-proxy/oauth2-proxy/pull/3001) Allow to set non-default authorization request response mode (@stieler-it)
+- [#3041](https://github.com/oauth2-proxy/oauth2-proxy/pull/3041) chore(deps): upgrade to latest golang v1.23.x release (@TheImplementer)
+- [#1916](https://github.com/oauth2-proxy/oauth2-proxy/pull/1916) fix: role extraction from access token in keycloak oidc (@Elektordi / @tuunit)
+- [#3014](https://github.com/oauth2-proxy/oauth2-proxy/pull/3014) feat: ability to parse JWT encoded profile claims (@ikarius)
+
+# V7.8.2
+
+## Release Highlights
+- 🐛 Cookie Expiration bug has been squashed
+- 🔵 Golang version upgrade to v1.23.7
+- 🕵️‍♀️ Vulnerabilities have been addressed
+  - CVE-2025-30204
+  - CVE-2025-27144
+  - CVE-2024-45336
+  - CVE-2025-22866
+  - CVE-2025-22870
+  - CVE-2024-45341
+  - CVE-2025-29923
+  - CVE-2025-22866
+  - CVE-2024-34156
+
+## Important Notes
+
+## Breaking Changes
+
 ## Changes since v7.8.1
+
+- [#2918](https://github.com/oauth2-proxy/oauth2-proxy/issues/2918) feat: add --bearer-token-login-fallback (@carillonator)
+- [#2927](https://github.com/oauth2-proxy/oauth2-proxy/pull/2927) chore(deps/build): bump golang to 1.23 and use go.mod as single point of truth for all build files (@tuunit)
+- [#2697](https://github.com/oauth2-proxy/oauth2-proxy/pull/2697) Use `Max-Age` instead of `Expires` for cookie expiration (@matpen-wi)
+- [#2969](https://github.com/oauth2-proxy/oauth2-proxy/pull/2969) Update golang.org/x/oauth2 to v0.27.0 to address CVE-2025-22868 (@dsymonds)
+- [#2977](https://github.com/oauth2-proxy/oauth2-proxy/pull/2977) Update golang.org/x/net to v0.36.0 to address CVE-2025-22870 (@dsymonds)
+- [#2982](https://github.com/oauth2-proxy/oauth2-proxy/pull/2982) chore(deps): remove go:generate tool from go.mod (@dolmen)
+- [#3011](https://github.com/oauth2-proxy/oauth2-proxy/pull/3011) chore(deps): update golang dependencies and pin to latest golang v1.23.x release (@tuunit)
+- [#2967](https://github.com/oauth2-proxy/oauth2-proxy/pull/2967) Update HashNonce to use crypto/sha256 (@egibs)
 
 # V7.8.1
 
