@@ -47,16 +47,17 @@ var _ = Describe("Load", func() {
 		},
 
 		Options: Options{
-			ProxyPrefix:        "/oauth2",
-			PingPath:           "/ping",
-			ReadyPath:          "/ready",
-			RealClientIPHeader: "X-Real-IP",
-			ForceHTTPS:         false,
-			Cookie:             cookieDefaults(),
-			Session:            sessionOptionsDefaults(),
-			Templates:          templatesDefaults(),
-			SkipAuthPreflight:  false,
-			Logging:            loggingDefaults(),
+			BearerTokenLoginFallback: true,
+			ProxyPrefix:              "/oauth2",
+			PingPath:                 "/ping",
+			ReadyPath:                "/ready",
+			RealClientIPHeader:       "X-Real-IP",
+			ForceHTTPS:               false,
+			Cookie:                   cookieDefaults(),
+			Session:                  sessionOptionsDefaults(),
+			Templates:                templatesDefaults(),
+			SkipAuthPreflight:        false,
+			Logging:                  loggingDefaults(),
 		},
 	}
 
@@ -470,7 +471,7 @@ sub:
 				configFile:     []byte(`stringSliceOption: "a"`),
 				input:          &TestOptions{},
 				expectedOutput: &TestOptions{},
-				expectedErr:    errors.New("error unmarshalling config: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go struct field TestOptions.StringSliceOption of type []string"),
+				expectedErr:    errors.New("error unmarshalling config: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go struct field TestOptions.TestOptionSubStruct.StringSliceOption of type []string"),
 			}),
 			Entry("with a config file containing environment variable references", loadYAMLTableInput{
 				configFile: []byte("stringOption: ${TESTUSER}"),
@@ -484,6 +485,31 @@ sub:
 				input:      &TestOptions{},
 				expectedOutput: &TestOptions{
 					StringOption: "Bob",
+				},
+			}),
+			Entry("with a config file containing $ signs for things other than environment variables", loadYAMLTableInput{
+				configFile: []byte(`
+stringOption: /$1
+stringSliceOption:
+- /$1
+- ^/(.*)$
+- api/$1
+- api/(.*)$
+- ^/api/(.*)$
+- /api/$1`),
+				input: &TestOptions{},
+				expectedOutput: &TestOptions{
+					StringOption: "/$1",
+					TestOptionSubStruct: TestOptionSubStruct{
+						StringSliceOption: []string{
+							"/$1",
+							"^/(.*)$",
+							"api/$1",
+							"api/(.*)$",
+							"^/api/(.*)$",
+							"/api/$1",
+						},
+					},
 				},
 			}),
 		)

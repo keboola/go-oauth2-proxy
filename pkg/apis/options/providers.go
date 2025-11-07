@@ -11,7 +11,11 @@ const (
 // OIDCAudienceClaims is the generic audience claim list used by the OIDC provider.
 var OIDCAudienceClaims = []string{"aud"}
 
-// Providers is a collection of definitions for providers.
+// The provider can be selected using the `provider` configuration value, or
+// set in the [`providers` array using
+// AlphaConfig](https://oauth2-proxy.github.io/oauth2-proxy/configuration/alpha-config#providers).
+// However, [**the feature to implement multiple providers is not
+// complete**](https://github.com/oauth2-proxy/oauth2-proxy/issues/926).
 type Providers []Provider
 
 // Provider holds all configuration for a single provider
@@ -68,6 +72,8 @@ type Provider struct {
 	LoginURL string `json:"loginURL,omitempty"`
 	// LoginURLParameters defines the parameters that can be passed from the start URL to the IdP login URL
 	LoginURLParameters []LoginURLParameter `json:"loginURLParameters,omitempty"`
+	// AuthRequestResponseMode defines the response mode to request during authorization request
+	AuthRequestResponseMode string `json:"authRequestResponseMode,omitempty"`
 	// RedeemURL is the token redemption endpoint
 	RedeemURL string `json:"redeemURL,omitempty"`
 	// ProfileURL is the profile access endpoint
@@ -109,6 +115,9 @@ const (
 	// BitbucketProvider is the provider type for Bitbucket
 	BitbucketProvider ProviderType = "bitbucket"
 
+	// CidaasProvider is the provider type for Cidaas IDP
+	CidaasProvider ProviderType = "cidaas"
+
 	// DigitalOceanProvider is the provider type for DigitalOcean
 	DigitalOceanProvider ProviderType = "digitalocean"
 
@@ -141,6 +150,9 @@ const (
 
 	// OIDCProvider is the provider type for OIDC
 	OIDCProvider ProviderType = "oidc"
+
+	// SourceHutProvider is the provider type for SourceHut
+	SourceHutProvider ProviderType = "sourcehut"
 )
 
 type KeycloakOptions struct {
