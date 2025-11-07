@@ -97,6 +97,10 @@ type Upstream struct {
 	// Defaults to 30 seconds.
 	Timeout *Duration `json:"timeout,omitempty"`
 
+	// DisableKeepAlives disables HTTP keep-alive connections to the upstream server.
+	// Defaults to false.
+	DisableKeepAlives bool `json:"disableKeepAlives,omitempty"`
+
 	// Transport overrides the default http transport.
 	Transport *http.Transport `json:"-"`
 }
