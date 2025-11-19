@@ -252,6 +252,8 @@ Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 | `serviceAccountJson` | _string_ | ServiceAccountJSON is the path to the service account json credentials |
 | `useApplicationDefaultCredentials` | _bool_ | UseApplicationDefaultCredentials is a boolean whether to use Application Default Credentials instead of a ServiceAccountJSON |
 | `targetPrincipal` | _string_ | TargetPrincipal is the Google Service Account used for Application Default Credentials |
+| `useOrganizationID` | _bool_ | UseOrganizationId indicates whether to use the organization ID as the UserName claim |
+| `adminAPIUserScope` | _string_ | admin scope needed for fetching user organization information from admin api, can be one of cloud, user or defaults to readonly |
 
 ### Header
 
@@ -264,6 +266,7 @@ response header.
 | ----- | ---- | ----------- |
 | `name` | _string_ | Name is the header name to be used for this set of values.<br/>Names should be unique within a list of Headers. |
 | `preserveRequestValue` | _bool_ | PreserveRequestValue determines whether any values for this header<br/>should be preserved for the request to the upstream server.<br/>This option only applies to injected request headers.<br/>Defaults to false (headers that match this header will be stripped). |
+| `InsecureSkipHeaderNormalization` | _bool_ | InsecureSkipHeaderNormalization disables normalizing the header name<br/>According to RFC 7230 Section 3.2 there aren't any rules about<br/>capitalization of header names, but the standard practice is to use<br/>Title-Case (e.g. X-Forwarded-For). By default, header names will be<br/>normalized to Title-Case and any incoming headers that match will be<br/>treated as the same header. Additionally underscores (_) in header names<br/>will be converted to dashes (-) when normalizing.<br/>Defaults to false (header names will be normalized). |
 | `values` | _[[]HeaderValue](#headervalue)_ | Values contains the desired values for this header |
 
 ### HeaderValue
