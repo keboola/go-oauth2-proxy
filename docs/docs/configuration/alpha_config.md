@@ -24,16 +24,55 @@ When using alpha configuration, your config file will look something like below:
 upstreams:
   - id: ...
     ...: ...
+providers:
+  - id: ...
+    ...: ...
+cookie:
+  secret: ...
+  ...: ...
 injectRequestHeaders:
-  - name: ...
-    ...: ...
+  - secretSource:
+      ...: ...
 injectResponseHeaders:
-  - name: ...
-    ...: ...
+  - claimSource:
+      ...: ...
 ```
 
 Please browse the [reference](#configuration-reference) below for the structure
 of the new configuration format.
+
+# Migration Guide
+
+This section details breaking changes and migration steps for moving to the new
+alpha configuration format.
+
+## Migrating header injections in v7.14.0
+
+From v7.14.0 onward, header injection sources must be explicitly nested. If you
+previously relied on squashed fields, update to the new structure before
+upgrading:
+
+```yaml
+# before v7.14.0
+injectRequestHeaders:
+- name: X-Forwarded-User
+  values:
+  - claim: user
+- name: X-Custom-Secret-header
+  values:
+  - value: my-super-secret
+
+# v7.14.0 and later
+injectRequestHeaders:
+- name: X-Forwarded-User
+  values:
+  - claimSource:
+      claim: user
+- name: X-Custom-Secret-header
+  values:
+  - secretSource:
+      value: my-super-secret
+```
 
 ## Using Alpha Configuration
 
@@ -67,9 +106,9 @@ the new config.
 oauth2-proxy --alpha-config ./path/to/new/config.yaml --config ./path/to/existing/config.cfg
 ```
 
-## Using ENV variables in the alpha configuration
+### How to use environment variables
 
-The alpha package supports the use of environment variables in place of yaml keys, allowing sensitive values to be pulled from somewhere other than the yaml file.
+The alpha package supports the use of environment variables in place of yaml values, allowing sensitive data to be pulled from somewhere other than the yaml file.
 When using environment variables, your yaml will look like this:
 
 ```yaml
@@ -80,6 +119,46 @@ When using environment variables, your yaml will look like this:
 ```
 Where CLIENT_SECRET is an environment variable.
 More information and available patterns can be found [here](https://github.com/a8m/envsubst#docs)
+
+### How to inject custom headers
+
+Configure `injectRequestHeaders` and `injectResponseHeaders` in alpha config YAML.
+
+```yaml
+injectRequestHeaders:
+  - name: "X-User-Email"
+    values:
+      - claimSource:
+          claim: "email" # extract the email claim contents from the id token
+  - name: "X-Static-Secret"
+    values:
+      # secrets need to be encoded with base64 when directly in the yaml config but will be send decoded
+      - secretSource:
+          value: "c3VwZXItc2VjcmV0"
+  - name: "X-Static-File-Secret"
+      - secretSource:
+          fromFile: "/path/to/my/secret"
+  - name: "X-Static-Env-Secret"
+      - secretSource:
+          value: "${MY_SECRET_ENV}" # content still needs to be base64 encoded
+injectResponseHeaders:
+  # Following will result in a header "Authorization: Basic <user:password> (encoded)"
+  - name: "Authorization"
+    values:
+    - claimSource:
+        claim: user
+        prefix: "Basic "
+        basicAuthPassword:
+          value: c3VwZXItc2VjcmV0LXBhc3N3b3Jk # base64 encoded password
+```
+
+**Value sources:** 
+* `claimSource` - `claim` (session claims either from id token or from profile URL)
+* `secretSource` - `value` (base64), `fromFile` (file path)
+
+**Request option:** `preserveRequestValue: true` retains existing header values
+
+**Incompatibility:** Remove legacy flags `pass-user-headers`, `set-xauthrequest`
 
 ## Removed options
 
@@ -203,16 +282,6 @@ ClaimSource allows loading a header value from a claim within the session
 | `claim` | _string_ | Claim is the name of the claim in the session that the value should be<br/>loaded from. Available claims: `access_token` `id_token` `created_at`<br/>`expires_on` `refresh_token` `email` `user` `groups` `preferred_username`. |
 | `prefix` | _string_ | Prefix is an optional prefix that will be prepended to the value of the<br/>claim if it is non-empty. |
 | `basicAuthPassword` | _[SecretSource](#secretsource)_ | BasicAuthPassword converts this claim into a basic auth header.<br/>Note the value of claim will become the basic auth username and the<br/>basicAuthPassword will be used as the password value. |
-
-### Duration
-#### (`string` alias)
-
-(**Appears on:** [Upstream](#upstream))
-
-Duration is as string representation of a period of time.
-A duration string is a is a possibly signed sequence of decimal numbers,
-each with optional fraction and a unit suffix, such as "300ms", "-1.5h" or "2h45m".
-Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
 ### GitHubOptions
 
@@ -502,9 +571,9 @@ Server represents the configuration for an HTTP(S) server
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `BindAddress` | _string_ | BindAddress is the address on which to serve traffic.<br/>Leave blank or set to "-" to disable. |
-| `SecureBindAddress` | _string_ | SecureBindAddress is the address on which to serve secure traffic.<br/>Leave blank or set to "-" to disable. |
-| `TLS` | _[TLS](#tls)_ | TLS contains the information for loading the certificate and key for the<br/>secure traffic and further configuration for the TLS server. |
+| `bindAddress` | _string_ | BindAddress is the address on which to serve traffic.<br/>Leave blank or set to "-" to disable. |
+| `secureBindAddress` | _string_ | SecureBindAddress is the address on which to serve secure traffic.<br/>Leave blank or set to "-" to disable. |
+| `tls` | _[TLS](#tls)_ | TLS contains the information for loading the certificate and key for the<br/>secure traffic and further configuration for the TLS server. |
 
 ### TLS
 
@@ -515,10 +584,10 @@ as well as an optional minimal TLS version that is acceptable.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `Key` | _[SecretSource](#secretsource)_ | Key is the TLS key data to use.<br/>Typically this will come from a file. |
-| `Cert` | _[SecretSource](#secretsource)_ | Cert is the TLS certificate data to use.<br/>Typically this will come from a file. |
-| `MinVersion` | _string_ | MinVersion is the minimal TLS version that is acceptable.<br/>E.g. Set to "TLS1.3" to select TLS version 1.3 |
-| `CipherSuites` | _[]string_ | CipherSuites is a list of TLS cipher suites that are allowed.<br/>E.g.:<br/>- TLS_RSA_WITH_RC4_128_SHA<br/>- TLS_RSA_WITH_AES_256_GCM_SHA384<br/>If not specified, the default Go safe cipher list is used.<br/>List of valid cipher suites can be found in the [crypto/tls documentation](https://pkg.go.dev/crypto/tls#pkg-constants). |
+| `key` | _[SecretSource](#secretsource)_ | Key is the TLS key data to use.<br/>Typically this will come from a file. |
+| `cert` | _[SecretSource](#secretsource)_ | Cert is the TLS certificate data to use.<br/>Typically this will come from a file. |
+| `minVersion` | _string_ | MinVersion is the minimal TLS version that is acceptable.<br/>E.g. Set to "TLS1.3" to select TLS version 1.3 |
+| `cipherSuites` | _[]string_ | CipherSuites is a list of TLS cipher suites that are allowed.<br/>E.g.:<br/>- TLS_RSA_WITH_RC4_128_SHA<br/>- TLS_RSA_WITH_AES_256_GCM_SHA384<br/>If not specified, the default Go safe cipher list is used.<br/>List of valid cipher suites can be found in the [crypto/tls documentation](https://pkg.go.dev/crypto/tls#pkg-constants). |
 
 ### URLParameterRule
 
@@ -550,10 +619,10 @@ Requests will be proxied to this upstream if the path matches the request path.
 | `insecureSkipTLSVerify` | _bool_ | InsecureSkipTLSVerify will skip TLS verification of upstream HTTPS hosts.<br/>This option is insecure and will allow potential Man-In-The-Middle attacks<br/>between OAuth2 Proxy and the upstream server.<br/>Defaults to false. |
 | `static` | _bool_ | Static will make all requests to this upstream have a static response.<br/>The response will have a body of "Authenticated" and a response code<br/>matching StaticCode.<br/>If StaticCode is not set, the response will return a 200 response. |
 | `staticCode` | _int_ | StaticCode determines the response code for the Static response.<br/>This option can only be used with Static enabled. |
-| `flushInterval` | _[Duration](#duration)_ | FlushInterval is the period between flushing the response buffer when<br/>streaming response from the upstream.<br/>Defaults to 1 second. |
+| `flushInterval` | _duration_ | FlushInterval is the period between flushing the response buffer when<br/>streaming response from the upstream.<br/>Defaults to 1 second. |
 | `passHostHeader` | _bool_ | PassHostHeader determines whether the request host header should be proxied<br/>to the upstream server.<br/>Defaults to true. |
 | `proxyWebSockets` | _bool_ | ProxyWebSockets enables proxying of websockets to upstream servers<br/>Defaults to true. |
-| `timeout` | _[Duration](#duration)_ | Timeout is the maximum duration the server will wait for a response from the upstream server.<br/>Defaults to 30 seconds. |
+| `timeout` | _duration_ | Timeout is the maximum duration the server will wait for a response from the upstream server.<br/>Defaults to 30 seconds. |
 | `disableKeepAlives` | _bool_ | DisableKeepAlives disables HTTP keep-alive connections to the upstream server.<br/>Defaults to false. |
 | `-` | _net/http.Transport_ | Transport overrides the default http transport. |
 
