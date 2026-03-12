@@ -66,13 +66,17 @@ DOCKER_BUILDX_PUSH            := $(DOCKER_BUILDX) --push
 DOCKER_BUILDX_PUSH_X_PLATFORM := $(DOCKER_BUILDX_PUSH) --platform ${DOCKER_BUILD_PLATFORM}
 
 DOCKER_BUILD_PLATFORM_ALPINE         ?= linux/amd64,linux/arm64,linux/ppc64le,linux/arm/v6,linux/arm/v7,linux/s390x
-DOCKER_BUILD_RUNTIME_IMAGE_ALPINE    ?= alpine:3.22.2
+DOCKER_BUILD_RUNTIME_IMAGE_ALPINE    ?= alpine:3.23.2
 DOCKER_BUILDX_ARGS_ALPINE            ?= --build-arg RUNTIME_IMAGE=${DOCKER_BUILD_RUNTIME_IMAGE_ALPINE} ${DOCKER_BUILDX_COMMON_ARGS}
 DOCKER_BUILDX_X_PLATFORM_ALPINE      := docker buildx build ${DOCKER_BUILDX_ARGS_ALPINE} --platform ${DOCKER_BUILD_PLATFORM_ALPINE}
 DOCKER_BUILDX_PUSH_X_PLATFORM_ALPINE := $(DOCKER_BUILDX_X_PLATFORM_ALPINE) --push
 
 .PHONY: build-docker
 build-docker: build-distroless build-alpine ## Build multi architecture docker images in both flavours (distroless / alpine)
+
+.PHONY: build-docker-local
+build-docker-local: ## Build distroless docker image and locally load into docker images
+	$(DOCKER_BUILDX) --load -t $(REGISTRY)/$(REPOSITORY):${VERSION}-local .
 
 .PHONY: build-distroless
 build-distroless: ## Build multi architecture distroless based docker image
