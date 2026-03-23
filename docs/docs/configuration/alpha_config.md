@@ -106,6 +106,17 @@ the new config.
 oauth2-proxy --alpha-config ./path/to/new/config.yaml --config ./path/to/existing/config.cfg
 ```
 
+### Validating Alpha Configuration
+
+Use `--config-test` to validate your alpha configuration without starting the proxy:
+
+```bash
+oauth2-proxy --config core.cfg --alpha-config alpha.yaml --config-test
+```
+
+This is useful for CI/CD pipelines to catch configuration errors before deployment.
+See the [Configuration Validation](./overview.md#configuration-validation) section for more details.
+
 ### How to use environment variables
 
 The alpha package supports the use of environment variables in place of yaml values, allowing sensitive data to be pulled from somewhere other than the yaml file.
@@ -159,6 +170,58 @@ injectResponseHeaders:
 **Request option:** `preserveRequestValue: true` retains existing header values
 
 **Incompatibility:** Remove legacy flags `pass-user-headers`, `set-xauthrequest`
+
+### How to utilize arbitrary claims provided by your Identity Provider
+
+With the additionalClaims attribute you can specify which claims you want to extract
+from the ID Token or userinfo (ProfileURL) endpoint.
+
+Configure these on the relevant provider entry:
+
+```yaml
+providers:
+  - id: my-oidc-provider
+    provider: oidc
+    clientID: ${OAUTH_CLIENT_ID}
+    clientSecret: ${OAUTH_CLIENT_SECRET}
+    oidcConfig:
+      issuerURL: https://issuer.example.com
+    profileURL: https://issuer.example.com/oauth2/userinfo
+    additionalClaims:
+      - department
+      - employee_id
+      - organization.name
+```
+
+OAuth2 Proxy resolves each configured claim using the following order:
+
+1. The raw ID token is checked first.
+2. If the claim is not present there and `profileURL` is configured, the userinfo endpoint is queried.
+3. If `skipClaimsFromProfileURL: true` is set, only the ID token is used.
+
+Claims that are not found are ignored rather than causing authentication to fail.
+
+You can use dot-separated paths for nested JSON objects, for example `organization.name`.
+Array indexes are not supported.
+
+Once loaded, these claims are stored in the session as `additionalClaims`. They can then be
+used anywhere session claims are accepted, including header injection:
+
+```yaml
+injectRequestHeaders:
+  - name: X-Department
+    values:
+      - claimSource:
+          claim: department
+  - name: X-Organization
+    values:
+      - claimSource:
+          claim: organization.name
+```
+
+This is useful when your IdP exposes application-specific attributes such as department,
+tenant, employee ID, entitlement, or other custom claims that are not part of the default
+OAuth2 Proxy session fields.
 
 ## Removed options
 
@@ -488,6 +551,7 @@ character.
 | `userIDClaim` | _string_ | UserIDClaim indicates which claim contains the user ID<br/>default set to 'email' |
 | `audienceClaims` | _[]string_ | AudienceClaim allows to define any claim that is verified against the client id<br/>By default `aud` claim is used for verification. |
 | `extraAudiences` | _[]string_ | ExtraAudiences is a list of additional audiences that are allowed<br/>to pass verification in addition to the client id. |
+| `enabledSigningAlgs` | _[]string_ | EnabledSigningAlgs is a list of allowed JWT signing algorithms.<br/>When discovery is enabled, the effective set is the intersection<br/>between this list and the provider's discovered supported algorithms.<br/>By default `RS256` is used if nothing has been discovered or specified. |
 
 ### Provider
 
@@ -526,6 +590,7 @@ Provider holds all configuration for a single provider
 | `scope` | _string_ | Scope is the OAuth scope specification |
 | `allowedGroups` | _[]string_ | AllowedGroups is a list of restrict logins to members of this group |
 | `code_challenge_method` | _string_ | The code challenge method |
+| `additionalClaims` | _[]string_ | Additional claims to be obtained from the upstream IDP, either from the id_token or from the userinfo endpoint if configured. |
 | `backendLogoutURL` | _string_ | URL to call to perform backend logout, `{id_token}` would be replaced by the actual `id_token` if available in the session |
 
 ### ProviderType
@@ -571,8 +636,8 @@ Server represents the configuration for an HTTP(S) server
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `bindAddress` | _string_ | BindAddress is the address on which to serve traffic.<br/>Leave blank or set to "-" to disable. |
-| `secureBindAddress` | _string_ | SecureBindAddress is the address on which to serve secure traffic.<br/>Leave blank or set to "-" to disable. |
+| `bindAddress` | _string_ | BindAddress is the address on which to serve traffic.<br/>Different types of bind addresses are supported:<br/>* `[http://]<addr>:<port>`<br/>* `fd:<int>` (case insensitive)<br/>* `unix://<path>`<br/>Unix sockets are created with default system umask mode, which can be overridden, e.g.: `unix://my-socket,mode=0777`<br/>Square brackets are required for ipv6 address, e.g. `http://[::1]:4180`<br/>Leave blank or set to "-" to disable. |
+| `secureBindAddress` | _string_ | SecureBindAddress is the address on which to serve secure traffic.<br/>Secure bind addresses need to respond with valid SSL and use the following format:<br/>* `[https://]<addr>:<port>`<br/>Square brackets are required for ipv6 address, e.g. `https://[::1]:4180`<br/>Leave blank or set to "-" to disable. |
 | `tls` | _[TLS](#tls)_ | TLS contains the information for loading the certificate and key for the<br/>secure traffic and further configuration for the TLS server. |
 
 ### TLS
