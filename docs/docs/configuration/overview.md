@@ -72,43 +72,6 @@ An example [oauth2-proxy.cfg](https://github.com/oauth2-proxy/oauth2-proxy/blob/
 | `--config-test`  | test configuration and exit (for CI/CD validation)      |
 | `--version`      | print version string                                    |
 
-## Configuration Validation
-
-The `--config-test` flag validates your configuration file without starting the proxy server. This is useful for:
-- **CI/CD pipelines**: Pre-deployment validation
-- **Configuration management**: Testing before applying changes
-- **Debugging**: Verifying syntax and required fields
-
-### Usage
-
-```bash
-# Test legacy config
-oauth2-proxy --config /etc/oauth2-proxy.cfg --config-test
-
-# Test alpha config
-oauth2-proxy --config /etc/core.cfg --alpha-config /etc/alpha.yaml --config-test
-
-# CI/CD pre-deployment check
-# Returns with exit code 1 if any validation errors occur
-oauth2-proxy --config new-config.cfg --config-test 
-```
-
-### Exit Codes
-
-- **0**: Configuration is valid ✅
-- **1**: Configuration is invalid (errors printed to stderr) ❌
-
-### Validation Coverage
-
-The `--config-test` flag performs the **same comprehensive validation** as normal startup, including:
-- Required fields (client ID, client secret, cookie secret, etc.)
-- Syntax validation (TOML/YAML parsing)
-- Provider configuration
-- Upstream server definitions
-- Session store connectivity (e.g., Redis network checks if configured)
-
-**Note**: Cannot be combined with `--convert-config-to-alpha`.
-
 ### General Provider Options
 
 Provider specific options can be found on their respective subpages.
@@ -230,6 +193,10 @@ Provider specific options can be found on their respective subpages.
 
 ### Proxy Options
 
+:::warning
+When `--reverse-proxy` is enabled, configure `--trusted-proxy-ip` to the IPs or CIDR ranges of the reverse proxies that are allowed to send `X-Forwarded-*` headers. If you leave it unset, OAuth2 Proxy currently trusts all source IPs for backwards compatibility, which means a client that can reach OAuth2 Proxy directly may be able to spoof forwarded headers.
+:::
+
 | Flag / Config Field                                                           | Type           | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Default     |
 | ----------------------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | flag: `--allow-query-semicolons`<br/>toml: `allow_query_semicolons`           | bool           | allow the use of semicolons in query args ([required for some legacy applications](https://github.com/golang/go/issues/25192))                                                                                                                                                                                                                                                                                                                                                                                        | `false`     |
@@ -248,10 +215,11 @@ Provider specific options can be found on their respective subpages.
 | flag: `--redirect-url`<br/>toml: `redirect_url`                               | string         | the OAuth Redirect URL, e.g. `"https://internalapp.yourcompany.com/oauth2/callback"`                                                                                                                                                                                                                                                                                                                                                                                                                                  |             |
 | flag: `--relative-redirect-url`<br/>toml: `relative_redirect_url`             | bool           | allow relative OAuth Redirect URL.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | false       |
 | flag: `--reverse-proxy`<br/>toml: `reverse_proxy`                             | bool           | are we running behind a reverse proxy, controls whether headers like X-Real-IP are accepted and allows X-Forwarded-\{Proto,Host,Uri\} headers to be used on redirect selection                                                                                                                                                                                                                                                                                                                                        | false       |
+| flag: `--trusted-proxy-ip`<br/>toml: `trusted_proxy_ips`                      | string \| list | list of IPs or CIDR ranges allowed to supply `X-Forwarded-*` headers when `--reverse-proxy` is enabled. If not set, OAuth2 Proxy preserves backwards compatibility by trusting all source IPs (`0.0.0.0/0`, `::/0`) and logs a warning at startup. Configure this to your reverse proxy addresses to prevent forwarded header spoofing.                                                                                                                                                              | `"0.0.0.0/0", "::/0"` |
 | flag: `--signature-key`<br/>toml: `signature_key`                             | string         | GAP-Signature request signature key (algorithm:secretkey)                                                                                                                                                                                                                                                                                                                                                                                                                                                             |             |
 | flag: `--skip-auth-preflight`<br/>toml: `skip_auth_preflight`                 | bool           | will skip authentication for OPTIONS requests                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | false       |
-| flag: `--skip-auth-regex`<br/>toml: `skip_auth_regex`                         | string \| list | (DEPRECATED for `--skip-auth-route`) bypass authentication for requests paths that match (may be given multiple times)                                                                                                                                                                                                                                                                                                                                                                                                |             |
-| flag: `--skip-auth-route`<br/>toml: `skip_auth_routes`                        | string \| list | bypass authentication for requests that match the method & path. Format: method=path_regex OR method!=path_regex. For all methods: path_regex OR !=path_regex                                                                                                                                                                                                                                                                                                                                                         |             |
+| flag: `--skip-auth-regex`<br/>toml: `skip_auth_regex`                         | string \| list | (DEPRECATED for `--skip-auth-route`) bypass authentication for requests paths that match (may be given multiple times). Path matching is performed against the normalized path only; fragment identifiers (`#`) and their URL-encoded form (`%23`) are stripped before evaluation.                                                                                                                                                                                                                                    |             |
+| flag: `--skip-auth-route`<br/>toml: `skip_auth_routes`                        | string \| list | bypass authentication for requests that match the method & path. Format: method=path_regex OR method!=path_regex. For all methods: path_regex OR !=path_regex. Path matching is performed against the normalized path only; fragment identifiers (`#`) and their URL-encoded form (`%23`) are stripped before evaluation.                                                                                                                                                                                             |             |
 | flag: `--skip-jwt-bearer-tokens`<br/>toml: `skip_jwt_bearer_tokens`           | bool           | will skip requests that have verified JWT bearer tokens (the token must have [`aud`](https://en.wikipedia.org/wiki/JSON_Web_Token#Standard_fields) that matches this client id or one of the extras from `extra-jwt-issuers`)                                                                                                                                                                                                                                                                                         | false       |
 | flag: `--skip-provider-button`<br/>toml: `skip_provider_button`               | bool           | will skip sign-in-page to directly reach the next step: oauth/start                                                                                                                                                                                                                                                                                                                                                                                                                                                   | false       |
 | flag: `--ssl-insecure-skip-verify`<br/>toml: `ssl_insecure_skip_verify`       | bool           | skip validation of certificates presented when using HTTPS providers                                                                                                                                                                                                                                                                                                                                                                                                                                                  | false       |
@@ -304,6 +272,43 @@ Provider specific options can be found on their respective subpages.
 | flag: `--disable-keep-alives`<br/>toml: `disable_keep_alives`                             | bool           | disable HTTP keep-alive connections to the upstream server                                                                                             | false   |
 | flag: `--upstream-timeout`<br/>toml: `upstream_timeout`                                   | duration       | maximum amount of time the server will wait for a response from the upstream                                                                           | 30s     |
 | flag: `--upstream`<br/>toml: `upstreams`                                                  | string \| list | the http url(s) of the upstream endpoint, file:// paths for static files or `static://<status_code>` for static response. Routing is based on the path |         |
+
+## Configuration Validation
+
+The `--config-test` flag validates your configuration file without starting the proxy server. This is useful for:
+- **CI/CD pipelines**: Pre-deployment validation
+- **Configuration management**: Testing before applying changes
+- **Debugging**: Verifying syntax and required fields
+
+### Usage
+
+```bash
+# Test legacy config
+oauth2-proxy --config /etc/oauth2-proxy.cfg --config-test
+
+# Test alpha config
+oauth2-proxy --config /etc/core.cfg --alpha-config /etc/alpha.yaml --config-test
+
+# CI/CD pre-deployment check
+# Returns with exit code 1 if any validation errors occur
+oauth2-proxy --config new-config.cfg --config-test 
+```
+
+### Exit Codes
+
+- **0**: Configuration is valid ✅
+- **1**: Configuration is invalid (errors printed to stderr) ❌
+
+### Validation Coverage
+
+The `--config-test` flag performs the **same comprehensive validation** as normal startup, including:
+- Required fields (client ID, client secret, cookie secret, etc.)
+- Syntax validation (TOML/YAML parsing)
+- Provider configuration
+- Upstream server definitions
+- Session store connectivity (e.g., Redis network checks if configured)
+
+**Note**: Cannot be combined with `--convert-config-to-alpha`.
 
 ## Upstreams Configuration
 
