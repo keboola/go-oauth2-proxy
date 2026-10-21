@@ -1,6 +1,7 @@
 package oauthproxy
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"encoding/base64"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -3807,4 +3809,63 @@ func TestIdTokenPlaceholderInSignOut(t *testing.T) {
 	newLocation := rw.Header().Values("Location")[0]
 
 	assert.Equal(t, "https://my-oidc-provider.example.com/sign_out_page?id_token_hint=eYjjjjjj.vvvv.ddd&post_logout_redirect_uri=https://my-app.example.com/", newLocation)
+}
+
+func TestOAuthCallbackCSRFFailureLogsNoSecrets(t *testing.T) {
+	const (
+		sessionCookieValue = "session-cookie-secret-value"
+		oauthCode          = "oauth-code-secret-value"
+		nonce              = "abcdefghijklmnopqrstuvwxyz012345"
+	)
+
+	testCases := map[string][]*http.Cookie{
+		"no cookies": nil,
+		"no csrf cookie": {
+			{Name: "_oauth2_proxy", Value: sessionCookieValue},
+		},
+		"invalid csrf cookie": {
+			{Name: "_oauth2_proxy", Value: sessionCookieValue},
+			{Name: "_oauth2_proxy_csrf", Value: sessionCookieValue},
+		},
+		"unexpected csrf cookie": {
+			{Name: "_oauth2_proxy", Value: sessionCookieValue},
+			{Name: "_other_csrf", Value: sessionCookieValue},
+		},
+	}
+
+	for name, reqCookies := range testCases {
+		t.Run(name, func(t *testing.T) {
+			opts := baseTestOptions()
+			opts.Logging.RequestEnabled = false
+			require.NoError(t, validation.Validate(opts))
+			proxy, err := NewOAuthProxy(opts, func(string) bool { return true })
+			require.NoError(t, err)
+
+			var logs bytes.Buffer
+			logger.SetOutput(&logs)
+			logger.SetErrOutput(&logs)
+			t.Cleanup(func() {
+				logger.SetOutput(os.Stdout)
+				logger.SetErrOutput(os.Stderr)
+			})
+
+			state := encodeState(nonce, "%2F", false)
+			req := httptest.NewRequest(http.MethodGet, "/oauth2/callback?code="+oauthCode+"&state="+state, nil)
+			for _, c := range reqCookies {
+				req.AddCookie(c)
+			}
+			rw := httptest.NewRecorder()
+			proxy.ServeHTTP(rw, req)
+
+			require.Equal(t, http.StatusForbidden, rw.Code)
+			out := logs.String()
+			assert.Contains(t, out, "[AuthFailure] Invalid authentication via OAuth2: unable to obtain CSRF cookie")
+			assert.Contains(t, out, "GET /oauth2/callback")
+			assert.NotContains(t, out, sessionCookieValue)
+			assert.NotContains(t, out, oauthCode)
+			assert.NotContains(t, out, "code=")
+			assert.NotContains(t, out, "state=")
+			assert.NotContains(t, out, nonce)
+		})
+	}
 }
