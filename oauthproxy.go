@@ -942,7 +942,7 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 		// There are a lot of issues opened complaining about missing CSRF cookies.
 		// Try to log the INs and OUTs of OAuthProxy, to be easier to analyse these issues.
 		LoggingCSRFCookiesInOAuthCallback(req, cookieName)
-		logger.Println(req, logger.AuthFailure, "Invalid authentication via OAuth2: unable to obtain CSRF cookie: %s (state=%s)", err, nonce)
+		logger.PrintAuthf("", req, logger.AuthFailure, "Invalid authentication via OAuth2: unable to obtain CSRF cookie: %s (%s %s)", err, req.Method, req.URL.Path)
 		p.ErrorPage(rw, req, http.StatusForbidden, err.Error(), "Login Failed: Unable to find a valid CSRF token. Please try again.")
 		return
 	}
@@ -1380,21 +1380,21 @@ func (p *OAuthProxy) errorJSON(rw http.ResponseWriter, code int) {
 func LoggingCSRFCookiesInOAuthCallback(req *http.Request, cookieName string) {
 	cookies := req.Cookies()
 	if len(cookies) == 0 {
-		logger.Println(req, logger.AuthFailure, "No cookies were found in OAuth callback.")
+		logger.PrintAuthf("", req, logger.AuthFailure, "No cookies were found in OAuth callback. (%s %s)", req.Method, req.URL.Path)
 		return
 	}
 
 	for _, c := range cookies {
 		if cookieName == c.Name {
-			logger.Println(req, logger.AuthFailure, "CSRF cookie %s was found in OAuth callback.", c.Name)
+			logger.PrintAuthf("", req, logger.AuthFailure, "CSRF cookie %s was found in OAuth callback. (%s %s)", c.Name, req.Method, req.URL.Path)
 			return
 		}
 
 		if strings.HasSuffix(c.Name, "_csrf") {
-			logger.Println(req, logger.AuthFailure, "CSRF cookie %s was found in OAuth callback, but it is not the expected one (%s).", c.Name, cookieName)
+			logger.PrintAuthf("", req, logger.AuthFailure, "CSRF cookie %s was found in OAuth callback, but it is not the expected one (%s). (%s %s)", c.Name, cookieName, req.Method, req.URL.Path)
 			return
 		}
 	}
 
-	logger.Println(req, logger.AuthFailure, "Cookies were found in OAuth callback, but none was a CSRF cookie.")
+	logger.PrintAuthf("", req, logger.AuthFailure, "Cookies were found in OAuth callback, but none was a CSRF cookie. (%s %s)", req.Method, req.URL.Path)
 }
