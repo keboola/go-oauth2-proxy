@@ -241,8 +241,11 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 }
 
 // needsRefresh determines whether we should attempt to refresh a session or not.
+// A session without a refresh token is never refreshed, and so never
+// re-validated either: validation after a failed refresh would end it once its
+// short-lived tokens expire, long before the cookie does.
 func needsRefresh(refreshPeriod time.Duration, session *sessionsapi.SessionState) bool {
-	return refreshPeriod > time.Duration(0) && session.Age() > refreshPeriod
+	return refreshPeriod > time.Duration(0) && session.RefreshToken != "" && session.Age() > refreshPeriod
 }
 
 // refreshSession attempts to refresh the session with the provider
