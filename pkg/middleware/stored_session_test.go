@@ -152,6 +152,13 @@ var _ = Describe("Stored Session Suite", func() {
 						ExpiresOn:    &createdFuture,
 						Clock:        clock,
 					}, nil
+				case "_oauth2_proxy=NoRefreshTokenSession":
+					return &sessionsapi.SessionState{
+						AccessToken: "Invalid",
+						CreatedAt:   &createdPast,
+						ExpiresOn:   &createdPast,
+						Clock:       clock,
+					}, nil
 				case "_oauth2_proxy=NonExistent":
 					return nil, fmt.Errorf("invalid cookie")
 				default:
@@ -327,6 +334,21 @@ var _ = Describe("Stored Session Suite", func() {
 				refreshPeriod:   1 * time.Minute,
 				refreshSession:  defaultRefreshFunc,
 				validateSession: func(context.Context, *sessionsapi.SessionState) bool { return false },
+			}),
+			Entry("with a session without a refresh token, older than the refresh period, expired and invalid", storedSessionLoaderTableInput{
+				requestHeaders: http.Header{
+					"Cookie": []string{"_oauth2_proxy=NoRefreshTokenSession"},
+				},
+				existingSession: nil,
+				expectedSession: &sessionsapi.SessionState{
+					AccessToken: "Invalid",
+					CreatedAt:   &createdPast,
+					ExpiresOn:   &createdPast,
+				},
+				store:           defaultSessionStore,
+				refreshPeriod:   1 * time.Minute,
+				refreshSession:  defaultRefreshFunc,
+				validateSession: defaultValidateFunc,
 			}),
 			Entry("when the session is not refreshed and is no longer valid", storedSessionLoaderTableInput{
 				requestHeaders: http.Header{
@@ -635,6 +657,48 @@ var _ = Describe("Stored Session Suite", func() {
 				expectedLockObtained: true,
 			}),
 		)
+	})
+
+	Context("refreshSessionIfNeeded with a session without a refresh token", func() {
+		It("neither refreshes, validates nor saves it, even when the provider does not implement refresh", func() {
+			createdPast := time.Now().Add(-5 * time.Minute)
+			refreshed, validated, saved := false, false, false
+
+			session := &sessionsapi.SessionState{
+				AccessToken: "Invalid",
+				CreatedAt:   &createdPast,
+				ExpiresOn:   &createdPast,
+				Lock:        &testLock{},
+			}
+			s := &storedSessionLoader{
+				refreshPeriod: 1 * time.Minute,
+				store: &fakeSessionStore{
+					LoadFunc: func(*http.Request) (*sessionsapi.SessionState, error) {
+						return session, nil
+					},
+					SaveFunc: func(http.ResponseWriter, *http.Request, *sessionsapi.SessionState) error {
+						saved = true
+						return nil
+					},
+				},
+				sessionRefresher: func(context.Context, *sessionsapi.SessionState) (bool, error) {
+					refreshed = true
+					return false, providers.ErrNotImplemented
+				},
+				sessionValidator: func(context.Context, *sessionsapi.SessionState) bool {
+					validated = true
+					return false
+				},
+			}
+
+			err := s.refreshSessionIfNeeded(httptest.NewRecorder(), httptest.NewRequest("", "/", nil), session)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(refreshed).To(BeFalse())
+			Expect(validated).To(BeFalse())
+			Expect(saved).To(BeFalse())
+			Expect(session.CreatedAt).To(Equal(&createdPast))
+			Expect(session.Lock.(*testLock).obtainAttempts).To(BeZero())
+		})
 	})
 
 	Context("refreshSession", func() {
