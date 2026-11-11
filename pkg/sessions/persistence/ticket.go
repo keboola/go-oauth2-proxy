@@ -180,7 +180,7 @@ func (t *ticket) saveSession(s *sessions.SessionState, saver saveFunc) error {
 func (t *ticket) loadSession(loader loadFunc, initLock initLockFunc) (*sessions.SessionState, error) {
 	ciphertext, err := loader(t.id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load the session state with the ticket: %v", err)
+		return nil, fmt.Errorf("failed to load the session state with the ticket: %w", err)
 	}
 	c, err := t.makeCipher()
 	if err != nil {
