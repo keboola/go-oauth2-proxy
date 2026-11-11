@@ -76,6 +76,8 @@ type StoredSessionLoaderOptions struct {
 	// If the sesssion is older than `RefreshPeriod` but the provider doesn't
 	// refresh it, we must re-validate using this validation.
 	ValidateSession func(context.Context, *sessionsapi.SessionState) bool
+
+	OnSessionStoreError func(http.ResponseWriter, *http.Request, error)
 }
 
 // NewStoredSessionLoader creates a new storedSessionLoader which loads
@@ -84,10 +86,16 @@ type StoredSessionLoaderOptions struct {
 // If a session was loader by a previous handler, it will not be replaced.
 func NewStoredSessionLoader(opts *StoredSessionLoaderOptions) alice.Constructor {
 	ss := &storedSessionLoader{
-		store:            opts.SessionStore,
-		refreshPeriod:    opts.RefreshPeriod,
-		sessionRefresher: opts.RefreshSession,
-		sessionValidator: opts.ValidateSession,
+		store:               opts.SessionStore,
+		refreshPeriod:       opts.RefreshPeriod,
+		sessionRefresher:    opts.RefreshSession,
+		sessionValidator:    opts.ValidateSession,
+		onSessionStoreError: opts.OnSessionStoreError,
+	}
+	if ss.onSessionStoreError == nil {
+		ss.onSessionStoreError = func(rw http.ResponseWriter, _ *http.Request, _ error) {
+			http.Error(rw, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		}
 	}
 	return ss.loadSession
 }
@@ -99,6 +107,8 @@ type storedSessionLoader struct {
 	refreshPeriod    time.Duration
 	sessionRefresher func(context.Context, *sessionsapi.SessionState) (bool, error)
 	sessionValidator func(context.Context, *sessionsapi.SessionState) bool
+
+	onSessionStoreError func(http.ResponseWriter, *http.Request, error)
 }
 
 // loadSession attempts to load a session as identified by the request cookies.
@@ -116,6 +126,11 @@ func (s *storedSessionLoader) loadSession(next http.Handler) http.Handler {
 		}
 
 		session, err := s.getValidatedSession(rw, req)
+		if errors.Is(err, sessionsapi.ErrStoreUnavailable) {
+			logger.Errorf("Error loading cookied session: %v, keeping session", err)
+			s.onSessionStoreError(rw, req, err)
+			return
+		}
 		if err != nil && !errors.Is(err, http.ErrNoCookie) {
 			// In the case when there was an error loading the session,
 			// we should clear the session
@@ -143,7 +158,7 @@ func (s *storedSessionLoader) getValidatedSession(rw http.ResponseWriter, req *h
 
 	err = s.refreshSessionIfNeeded(rw, req, session)
 	if err != nil {
-		return nil, fmt.Errorf("error refreshing access token for session (%s): %v", session, err)
+		return nil, fmt.Errorf("error refreshing access token for session (%s): %w", session, err)
 	}
 
 	return session, nil
@@ -169,7 +184,7 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 		default:
 			err := session.ObtainLock(req.Context(), sessionRefreshLockDuration)
 			if err != nil && !errors.Is(err, sessionsapi.ErrLockNotObtained) {
-				return fmt.Errorf("error occurred while trying to obtain lock: %v", err)
+				return fmt.Errorf("error occurred while trying to obtain lock: %w", err)
 			} else if errors.Is(err, sessionsapi.ErrLockNotObtained) {
 				time.Sleep(sessionRefreshRetryPeriod)
 				continue
@@ -193,7 +208,7 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 	// Reload the session in case it was changed underneath us.
 	freshSession, err := s.store.Load(req)
 	if err != nil {
-		return fmt.Errorf("could not load session: %v", err)
+		return fmt.Errorf("could not load session: %w", err)
 	}
 	if freshSession == nil {
 		return errors.New("session no longer exists, it may have been removed by another request")
