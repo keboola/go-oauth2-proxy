@@ -11,6 +11,7 @@
 - [Added request argument to `WriteErrorPage`](https://github.com/keboola/go-oauth2-proxy/commit/757d1371618332e79bc70a6371654b740b754a26)
 - [Removed request dumps from OAuth callback CSRF failure logs](https://github.com/keboola/go-oauth2-proxy/commit/a3b94a7df6ca755daae5dd9c3de49e8fcb5b8d80)
 - [Sessions without a refresh token are never refreshed or re-validated](https://github.com/keboola/go-oauth2-proxy/commit/409bd0b6f7217ef8a0486ef22149d53faab3622b)
+- [Session store outages keep the session cookie and call option `OnSessionStoreError`](https://github.com/keboola/go-oauth2-proxy/commit/edbfaa6d79cfb1ec0746086365af541c6d6e98f3)
 
 
 ## Fork maintenance
