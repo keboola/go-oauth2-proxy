@@ -37,7 +37,7 @@ func (l *Lock) Obtain(ctx context.Context, expiration time.Duration) error {
 		return sessions.ErrLockNotObtained
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", sessions.ErrStoreUnavailable, err)
 	}
 	l.lock = lock
 	return nil

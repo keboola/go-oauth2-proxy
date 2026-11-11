@@ -40,7 +40,7 @@ func NewRedisSessionStore(opts *options.SessionOptions, cookieOpts *options.Cook
 func (store *SessionStore) Save(ctx context.Context, key string, value []byte, exp time.Duration) error {
 	err := store.Client.Set(ctx, key, value, exp)
 	if err != nil {
-		return fmt.Errorf("error saving redis session: %v", err)
+		return fmt.Errorf("error saving redis session: %w: %w", sessions.ErrStoreUnavailable, err)
 	}
 	return nil
 }
@@ -52,7 +52,7 @@ func (store *SessionStore) Load(ctx context.Context, key string) ([]byte, error)
 	if err == redis.Nil {
 		return nil, fmt.Errorf("session does not exist")
 	} else if err != nil {
-		return nil, fmt.Errorf("error loading redis session: %v", err)
+		return nil, fmt.Errorf("error loading redis session: %w: %w", sessions.ErrStoreUnavailable, err)
 	}
 
 	return value, nil
@@ -63,7 +63,7 @@ func (store *SessionStore) Load(ctx context.Context, key string) ([]byte, error)
 func (store *SessionStore) Clear(ctx context.Context, key string) error {
 	err := store.Client.Del(ctx, key)
 	if err != nil {
-		return fmt.Errorf("error clearing the session from redis: %v", err)
+		return fmt.Errorf("error clearing the session from redis: %w: %w", sessions.ErrStoreUnavailable, err)
 	}
 	return nil
 }
