@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	sessionsapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/providers"
+	"golang.org/x/oauth2"
 )
 
 const (
@@ -59,6 +61,15 @@ func isFatalRefreshError(err error) bool {
 	return false
 }
 
+func isProviderUnavailableError(err error) bool {
+	if isFatalRefreshError(err) {
+		return false
+	}
+	var retrieveErr *oauth2.RetrieveError
+	var urlErr *url.Error
+	return errors.As(err, &retrieveErr) || errors.As(err, &urlErr)
+}
+
 // StoredSessionLoaderOptions contains all of the requirements to construct
 // a stored session loader.
 // All options must be provided.
@@ -76,6 +87,8 @@ type StoredSessionLoaderOptions struct {
 	// If the sesssion is older than `RefreshPeriod` but the provider doesn't
 	// refresh it, we must re-validate using this validation.
 	ValidateSession func(context.Context, *sessionsapi.SessionState) bool
+
+	OnProviderError func(http.ResponseWriter, *http.Request, error)
 }
 
 // NewStoredSessionLoader creates a new storedSessionLoader which loads
@@ -88,6 +101,13 @@ func NewStoredSessionLoader(opts *StoredSessionLoaderOptions) alice.Constructor 
 		refreshPeriod:    opts.RefreshPeriod,
 		sessionRefresher: opts.RefreshSession,
 		sessionValidator: opts.ValidateSession,
+
+		onProviderError: opts.OnProviderError,
+	}
+	if ss.onProviderError == nil {
+		ss.onProviderError = func(rw http.ResponseWriter, _ *http.Request, _ error) {
+			http.Error(rw, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		}
 	}
 	return ss.loadSession
 }
@@ -99,6 +119,8 @@ type storedSessionLoader struct {
 	refreshPeriod    time.Duration
 	sessionRefresher func(context.Context, *sessionsapi.SessionState) (bool, error)
 	sessionValidator func(context.Context, *sessionsapi.SessionState) bool
+
+	onProviderError func(http.ResponseWriter, *http.Request, error)
 }
 
 // loadSession attempts to load a session as identified by the request cookies.
@@ -116,6 +138,15 @@ func (s *storedSessionLoader) loadSession(next http.Handler) http.Handler {
 		}
 
 		session, err := s.getValidatedSession(rw, req)
+		if errors.Is(err, sessionsapi.ErrProviderUnavailable) {
+			if req.Context().Err() != nil {
+				logger.Errorf("Error loading cookied session: %v, request canceled, keeping session", err)
+				return
+			}
+			logger.Errorf("Error loading cookied session: %v, keeping session", err)
+			s.onProviderError(rw, req, err)
+			return
+		}
 		if err != nil && !errors.Is(err, http.ErrNoCookie) {
 			// In the case when there was an error loading the session,
 			// we should clear the session
@@ -143,7 +174,7 @@ func (s *storedSessionLoader) getValidatedSession(rw http.ResponseWriter, req *h
 
 	err = s.refreshSessionIfNeeded(rw, req, session)
 	if err != nil {
-		return nil, fmt.Errorf("error refreshing access token for session (%s): %v", session, err)
+		return nil, fmt.Errorf("error refreshing access token for session (%s): %w", session, err)
 	}
 
 	return session, nil
@@ -232,6 +263,10 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 			return fmt.Errorf("session invalidated due to fatal refresh error: %w", err)
 		}
 
+		if errors.Is(err, sessionsapi.ErrProviderUnavailable) {
+			return err
+		}
+
 		// For non-fatal errors (network issues, timeouts), keep the session
 		// and let validateSession determine if it's still usable
 	}
@@ -253,6 +288,9 @@ func needsRefresh(refreshPeriod time.Duration, session *sessionsapi.SessionState
 func (s *storedSessionLoader) refreshSession(rw http.ResponseWriter, req *http.Request, session *sessionsapi.SessionState) error {
 	refreshed, err := s.sessionRefresher(req.Context(), session)
 	if err != nil && !errors.Is(err, providers.ErrNotImplemented) {
+		if isProviderUnavailableError(err) {
+			return fmt.Errorf("error refreshing tokens: %w: %w", sessionsapi.ErrProviderUnavailable, err)
+		}
 		return fmt.Errorf("error refreshing tokens: %v", err)
 	}
 

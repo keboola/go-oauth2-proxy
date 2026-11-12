@@ -15,6 +15,8 @@ type SessionStore interface {
 	VerifyConnection(ctx context.Context) error
 }
 
+var ErrProviderUnavailable = errors.New("identity provider unavailable")
+
 var ErrLockNotObtained = errors.New("lock: not obtained")
 var ErrNotLocked = errors.New("tried to release not existing lock")
 
