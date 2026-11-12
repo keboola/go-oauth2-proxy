@@ -742,7 +742,7 @@ var _ = Describe("Stored Session Suite", func() {
 				req = middlewareapi.AddRequestScope(req, &middlewareapi.RequestScope{})
 				err := s.refreshSession(nil, req, in.session)
 				if in.expectedErr != nil {
-					Expect(err).To(MatchError(in.expectedErr))
+					Expect(err).To(MatchError(in.expectedErr.Error()))
 				} else {
 					Expect(err).ToNot(HaveOccurred())
 				}
