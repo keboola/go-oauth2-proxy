@@ -65,9 +65,15 @@ func isProviderUnavailableError(err error) bool {
 	if isFatalRefreshError(err) {
 		return false
 	}
-	var retrieveErr *oauth2.RetrieveError
 	var urlErr *url.Error
-	return errors.As(err, &retrieveErr) || errors.As(err, &urlErr)
+	if errors.As(err, &urlErr) {
+		return true
+	}
+	var retrieveErr *oauth2.RetrieveError
+	if !errors.As(err, &retrieveErr) || retrieveErr.Response == nil {
+		return false
+	}
+	return retrieveErr.Response.StatusCode >= http.StatusInternalServerError || retrieveErr.Response.StatusCode == http.StatusTooManyRequests
 }
 
 // StoredSessionLoaderOptions contains all of the requirements to construct
@@ -139,7 +145,7 @@ func (s *storedSessionLoader) loadSession(next http.Handler) http.Handler {
 
 		session, err := s.getValidatedSession(rw, req)
 		if errors.Is(err, sessionsapi.ErrProviderUnavailable) {
-			if req.Context().Err() != nil {
+			if errors.Is(req.Context().Err(), context.Canceled) {
 				logger.Errorf("Error loading cookied session: %v, request canceled, keeping session", err)
 				return
 			}

@@ -36,6 +36,7 @@ type providerErrorCase struct {
 	closeServer  bool
 	withHook     bool
 	cancelReq    bool
+	deadlineReq  bool
 }
 
 func newProviderErrorTestProvider(t *testing.T, tc providerErrorCase) *providers.OIDCProvider {
@@ -118,6 +119,11 @@ func serveWithProviderError(t *testing.T, tc providerErrorCase) *providerErrorRe
 		cancel()
 		req = req.WithContext(ctx)
 	}
+	if tc.deadlineReq {
+		ctx, cancel := context.WithDeadline(req.Context(), time.Now().Add(-time.Second))
+		t.Cleanup(cancel)
+		req = req.WithContext(ctx)
+	}
 	req = middlewareapi.AddRequestScope(req, &middlewareapi.RequestScope{})
 
 	handler := NewStoredSessionLoader(opts)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -159,6 +165,7 @@ func TestLoadSession_ProviderUnavailable_CallsHook(t *testing.T) {
 		"token endpoint 503": {tokenHandler: tokenStatus(http.StatusServiceUnavailable, "")},
 		"token endpoint 500": {tokenHandler: tokenStatus(http.StatusInternalServerError, `{"error":"server_error"}`)},
 		"connection refused": {tokenHandler: tokenStatus(http.StatusOK, ""), closeServer: true},
+		"token endpoint 429": {tokenHandler: tokenStatus(http.StatusTooManyRequests, "")},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -209,6 +216,41 @@ func TestLoadSession_ProviderFatalError_ClearsCookie(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadSession_ProviderPermanentError_ClearsCookie(t *testing.T) {
+	cases := map[string]struct {
+		code int
+		body string
+	}{
+		"400 invalid_request":       {http.StatusBadRequest, `{"error":"invalid_request"}`},
+		"401 unauthorized_client":   {http.StatusUnauthorized, `{"error":"unauthorized_client"}`},
+		"200 with an error in body": {http.StatusOK, `{"error":"access_denied"}`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			res := serveWithProviderError(t, providerErrorCase{
+				tokenHandler: tokenStatus(tc.code, tc.body),
+				withHook:     true,
+			})
+
+			assert.False(t, res.hookCalled)
+			assert.True(t, res.nextCalled)
+			assert.NotEmpty(t, providerErrorSetCookies(res.rw))
+		})
+	}
+}
+
+func TestLoadSession_ProviderServerDeadline_CallsHook(t *testing.T) {
+	res := serveWithProviderError(t, providerErrorCase{
+		tokenHandler: tokenStatus(http.StatusServiceUnavailable, ""),
+		withHook:     true,
+		deadlineReq:  true,
+	})
+
+	assert.True(t, res.hookCalled)
+	assert.Equal(t, http.StatusTeapot, res.rw.Code)
+	assert.Empty(t, providerErrorSetCookies(res.rw))
 }
 
 func TestLoadSession_ProviderInvalidIDToken_ClearsCookie(t *testing.T) {
