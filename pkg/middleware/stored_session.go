@@ -231,6 +231,9 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 	// We are holding the lock and the session needs a refresh
 	logger.Printf("Refreshing session - User: %s; SessionAge: %s", session.User, session.Age())
 	if err := s.refreshSession(rw, req, session); err != nil {
+		if errors.Is(err, sessionsapi.ErrStoreUnavailable) {
+			return err
+		}
 		logger.Errorf("Unable to refresh session: %v", err)
 
 		// Check if this is a fatal error that indicates the session is revoked
@@ -295,7 +298,7 @@ func (s *storedSessionLoader) refreshSession(rw http.ResponseWriter, req *http.R
 	err = s.store.Save(rw, req, session)
 	if err != nil {
 		logger.PrintAuthf(session.Email, req, logger.AuthError, "error saving session: %v", err)
-		return fmt.Errorf("error saving session: %v", err)
+		return fmt.Errorf("error saving session: %w", err)
 	}
 	return nil
 }

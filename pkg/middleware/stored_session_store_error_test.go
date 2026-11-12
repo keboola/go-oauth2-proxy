@@ -288,3 +288,24 @@ func TestManagerLoad_SessionDeleted_ClearsCookie(t *testing.T) {
 	assert.False(t, res.hookCalled)
 	assert.True(t, res.nextCalled)
 }
+
+func TestManagerLoad_RedisDownAfterRefresh_KeepsCookie(t *testing.T) {
+	r := newRedisSessionTest(t, refreshDueSession(nil))
+	opts := r.loaderOptions(t)
+	var refreshed bool
+	opts.RefreshSession = func(_ context.Context, s *sessionsapi.SessionState) (bool, error) {
+		refreshed = true
+		s.RefreshToken = "rotated-refresh-token"
+		r.mr.Close()
+		return true, nil
+	}
+
+	res := serveStoredSession(t, opts, r.req, true)
+
+	require.True(t, refreshed)
+	assert.Equal(t, http.StatusServiceUnavailable, res.rw.Code)
+	assert.False(t, expiresSessionCookie(res.rw), "the session cookie must not be cleared")
+	assert.False(t, res.nextCalled, "the request must not be served with tokens that were not saved")
+	require.True(t, res.hookCalled)
+	assert.ErrorIs(t, res.hookErr, sessionsapi.ErrStoreUnavailable)
+}
