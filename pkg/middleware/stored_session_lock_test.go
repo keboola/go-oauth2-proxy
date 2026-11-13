@@ -93,3 +93,17 @@ func TestRefresh_HungRefresh_EndsBeforeLockExpires(t *testing.T) {
 		t.Fatal("the refresh was not cancelled")
 	}
 }
+
+func TestRefresh_LockWait_BacksOff(t *testing.T) {
+	r := newRedisSessionTest(t, refreshDueSession(nil))
+	require.NoError(t, r.mr.Set(r.mr.Keys()[0]+".lock", "held-by-another-request"))
+	var attempts atomic.Int32
+	r.store.afterNotObtained = func() { attempts.Add(1) }
+	opts := r.loaderOptions(t)
+	opts.RefreshObtainTimeout = time.Second
+
+	res := serveStoredSession(t, opts, r.req, true)
+
+	require.True(t, res.hookCalled)
+	assert.Less(t, attempts.Load(), int32(20))
+}

@@ -23,8 +23,9 @@ const (
 	sessionRefreshObtainMargin = 5 * time.Second
 
 	// How long to wait after failing to obtain the lock before trying again.
-	// TODO: This should probably be configurable by the end user.
-	sessionRefreshRetryPeriod = 10 * time.Millisecond
+	// The wait doubles after each attempt, up to the max.
+	sessionRefreshRetryPeriod    = 10 * time.Millisecond
+	sessionRefreshMaxRetryPeriod = 100 * time.Millisecond
 )
 
 // isFatalRefreshError checks if a refresh error indicates a revoked or
@@ -183,6 +184,7 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 	}
 
 	var lockObtained bool
+	retryPeriod := sessionRefreshRetryPeriod
 	ctx, cancel := context.WithTimeout(context.Background(), s.refreshObtainTimeout())
 	defer cancel()
 
@@ -195,7 +197,8 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 			if err != nil && !errors.Is(err, sessionsapi.ErrLockNotObtained) {
 				return fmt.Errorf("error occurred while trying to obtain lock: %w", err)
 			} else if errors.Is(err, sessionsapi.ErrLockNotObtained) {
-				time.Sleep(sessionRefreshRetryPeriod)
+				time.Sleep(retryPeriod)
+				retryPeriod = min(2*retryPeriod, sessionRefreshMaxRetryPeriod)
 				continue
 			}
 			// No error means we obtained the lock
