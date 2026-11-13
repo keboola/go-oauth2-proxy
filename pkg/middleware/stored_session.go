@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	sessionsapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/providers"
+	"golang.org/x/oauth2"
 )
 
 const (
@@ -55,6 +57,21 @@ func isFatalRefreshError(err error) bool {
 	return false
 }
 
+func isProviderUnavailableError(err error) bool {
+	if isFatalRefreshError(err) {
+		return false
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return true
+	}
+	var retrieveErr *oauth2.RetrieveError
+	if !errors.As(err, &retrieveErr) || retrieveErr.Response == nil {
+		return false
+	}
+	return retrieveErr.Response.StatusCode >= http.StatusInternalServerError || retrieveErr.Response.StatusCode == http.StatusTooManyRequests
+}
+
 // StoredSessionLoaderOptions contains all of the requirements to construct
 // a stored session loader.
 // All options must be provided.
@@ -78,6 +95,8 @@ type StoredSessionLoaderOptions struct {
 	ValidateSession func(context.Context, *sessionsapi.SessionState) bool
 
 	OnSessionStoreError func(http.ResponseWriter, *http.Request, error)
+
+	OnProviderError func(http.ResponseWriter, *http.Request, error)
 }
 
 // NewStoredSessionLoader creates a new storedSessionLoader which loads
@@ -92,6 +111,8 @@ func NewStoredSessionLoader(opts *StoredSessionLoaderOptions) alice.Constructor 
 		obtainTimeout:       opts.RefreshObtainTimeout,
 		sessionValidator:    opts.ValidateSession,
 		onSessionStoreError: opts.OnSessionStoreError,
+
+		onProviderError: opts.OnProviderError,
 	}
 	ss.sessionRefresher = func(ctx context.Context, session *sessionsapi.SessionState) (bool, error) {
 		// The refresh must end, and its result be saved, before the lock expires,
@@ -102,6 +123,11 @@ func NewStoredSessionLoader(opts *StoredSessionLoaderOptions) alice.Constructor 
 	}
 	if ss.onSessionStoreError == nil {
 		ss.onSessionStoreError = func(rw http.ResponseWriter, _ *http.Request, _ error) {
+			http.Error(rw, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		}
+	}
+	if ss.onProviderError == nil {
+		ss.onProviderError = func(rw http.ResponseWriter, _ *http.Request, _ error) {
 			http.Error(rw, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		}
 	}
@@ -119,6 +145,8 @@ type storedSessionLoader struct {
 	sessionValidator func(context.Context, *sessionsapi.SessionState) bool
 
 	onSessionStoreError func(http.ResponseWriter, *http.Request, error)
+
+	onProviderError func(http.ResponseWriter, *http.Request, error)
 }
 
 // loadSession attempts to load a session as identified by the request cookies.
@@ -139,6 +167,15 @@ func (s *storedSessionLoader) loadSession(next http.Handler) http.Handler {
 		if errors.Is(err, sessionsapi.ErrStoreUnavailable) {
 			logger.Errorf("Error loading cookied session: %v, keeping session", err)
 			s.onSessionStoreError(rw, req, err)
+			return
+		}
+		if errors.Is(err, sessionsapi.ErrProviderUnavailable) {
+			if errors.Is(req.Context().Err(), context.Canceled) {
+				logger.Errorf("Error loading cookied session: %v, request canceled, keeping session", err)
+				return
+			}
+			logger.Errorf("Error loading cookied session: %v, keeping session", err)
+			s.onProviderError(rw, req, err)
 			return
 		}
 		if err != nil && !errors.Is(err, http.ErrNoCookie) {
@@ -262,6 +299,10 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 			return fmt.Errorf("session invalidated due to fatal refresh error: %w", err)
 		}
 
+		if errors.Is(err, sessionsapi.ErrProviderUnavailable) {
+			return err
+		}
+
 		// For non-fatal errors (network issues, timeouts), keep the session
 		// and let validateSession determine if it's still usable
 	}
@@ -297,6 +338,9 @@ func needsRefresh(refreshPeriod time.Duration, session *sessionsapi.SessionState
 func (s *storedSessionLoader) refreshSession(rw http.ResponseWriter, req *http.Request, session *sessionsapi.SessionState) error {
 	refreshed, err := s.sessionRefresher(req.Context(), session)
 	if err != nil && !errors.Is(err, providers.ErrNotImplemented) {
+		if isProviderUnavailableError(err) {
+			return fmt.Errorf("error refreshing tokens: %w: %w", sessionsapi.ErrProviderUnavailable, err)
+		}
 		return fmt.Errorf("error refreshing tokens: %v", err)
 	}
 
