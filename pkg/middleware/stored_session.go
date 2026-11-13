@@ -188,7 +188,7 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 	for !lockObtained {
 		select {
 		case <-ctx.Done():
-			return errors.New("timeout obtaining session lock")
+			return fmt.Errorf("%w: timeout obtaining session lock", sessionsapi.ErrStoreUnavailable)
 		default:
 			err := session.ObtainLock(req.Context(), s.refreshLockDuration())
 			if err != nil && !errors.Is(err, sessionsapi.ErrLockNotObtained) {
