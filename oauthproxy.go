@@ -463,6 +463,9 @@ func buildSessionChain(opts *options.Options, provider providers.Provider, sessi
 		RefreshSession:      provider.RefreshSession,
 		ValidateSession:     provider.ValidateSession,
 		OnSessionStoreError: opts.OnSessionStoreError,
+
+		RefreshLockDuration:  opts.Session.RefreshLockDuration,
+		RefreshObtainTimeout: opts.Session.RefreshObtainTimeout,
 	}))
 
 	return chain

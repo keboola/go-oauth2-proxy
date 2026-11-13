@@ -78,6 +78,9 @@ type StoredSessionLoaderOptions struct {
 	ValidateSession func(context.Context, *sessionsapi.SessionState) bool
 
 	OnSessionStoreError func(http.ResponseWriter, *http.Request, error)
+
+	RefreshLockDuration  time.Duration
+	RefreshObtainTimeout time.Duration
 }
 
 // NewStoredSessionLoader creates a new storedSessionLoader which loads
@@ -91,6 +94,8 @@ func NewStoredSessionLoader(opts *StoredSessionLoaderOptions) alice.Constructor 
 		sessionRefresher:    opts.RefreshSession,
 		sessionValidator:    opts.ValidateSession,
 		onSessionStoreError: opts.OnSessionStoreError,
+		lockDuration:        opts.RefreshLockDuration,
+		obtainTimeout:       opts.RefreshObtainTimeout,
 	}
 	if ss.onSessionStoreError == nil {
 		ss.onSessionStoreError = func(rw http.ResponseWriter, _ *http.Request, _ error) {
@@ -109,6 +114,9 @@ type storedSessionLoader struct {
 	sessionValidator func(context.Context, *sessionsapi.SessionState) bool
 
 	onSessionStoreError func(http.ResponseWriter, *http.Request, error)
+
+	lockDuration  time.Duration
+	obtainTimeout time.Duration
 }
 
 // loadSession attempts to load a session as identified by the request cookies.
@@ -174,7 +182,7 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 	}
 
 	var lockObtained bool
-	ctx, cancel := context.WithTimeout(context.Background(), sessionRefreshObtainTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), s.refreshObtainTimeout())
 	defer cancel()
 
 	for !lockObtained {
@@ -182,7 +190,7 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 		case <-ctx.Done():
 			return errors.New("timeout obtaining session lock")
 		default:
-			err := session.ObtainLock(req.Context(), sessionRefreshLockDuration)
+			err := session.ObtainLock(req.Context(), s.refreshLockDuration())
 			if err != nil && !errors.Is(err, sessionsapi.ErrLockNotObtained) {
 				return fmt.Errorf("error occurred while trying to obtain lock: %w", err)
 			} else if errors.Is(err, sessionsapi.ErrLockNotObtained) {
@@ -256,6 +264,20 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 
 	// Validate all sessions after any Redeem/Refresh operation (fail or success)
 	return s.validateSession(req.Context(), session)
+}
+
+func (s *storedSessionLoader) refreshLockDuration() time.Duration {
+	if s.lockDuration > 0 {
+		return s.lockDuration
+	}
+	return sessionRefreshLockDuration
+}
+
+func (s *storedSessionLoader) refreshObtainTimeout() time.Duration {
+	if s.obtainTimeout > 0 {
+		return s.obtainTimeout
+	}
+	return sessionRefreshObtainTimeout
 }
 
 // needsRefresh determines whether we should attempt to refresh a session or not.
