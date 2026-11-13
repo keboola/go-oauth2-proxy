@@ -121,15 +121,17 @@ var _ = Describe("Session Ticket Tests", func() {
 			t, err := newTicket(&options.Cookie{Name: "dummy"})
 			Expect(err).ToNot(HaveOccurred())
 
+			loadErr := errors.New("load error")
 			data, err := t.loadSession(
 				func(k string) ([]byte, error) {
-					return nil, errors.New("load error")
+					return nil, loadErr
 				},
 				func(k string) sessions.Lock {
 					return &sessions.NoOpLock{}
 				})
 			Expect(data).To(BeNil())
-			Expect(err).To(MatchError(errors.New("failed to load the session state with the ticket: load error")))
+			Expect(err).To(MatchError("failed to load the session state with the ticket: load error"))
+			Expect(err).To(MatchError(loadErr))
 		})
 	})
 

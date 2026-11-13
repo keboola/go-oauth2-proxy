@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -317,6 +318,52 @@ var _ = Describe("Redis SessionStore Tests", func() {
 			Expect(injected.PoolStats().Hits + injected.PoolStats().Misses).To(BeNumerically(">=", usesAfterFirstSave+99))
 			Expect(injected.PoolStats().TotalConns).To(BeNumerically("<=", connsAfterFirstSave))
 			Expect(mr.Keys()).To(HaveLen(100))
+		})
+	})
+
+	Describe("Redis SessionStore errors", func() {
+		var mr *miniredis.Miniredis
+		var store *SessionStore
+
+		BeforeEach(func() {
+			var err error
+			mr, err = miniredis.Run()
+			Expect(err).ToNot(HaveOccurred())
+			ss, err := NewRedisSessionStore(&options.SessionOptions{
+				Type:  options.RedisSessionStoreType,
+				Redis: options.RedisStoreOptions{ConnectionURL: "redis://" + mr.Addr()},
+			}, &options.Cookie{})
+			Expect(err).ToNot(HaveOccurred())
+			store = ss.(*persistence.Manager).Store.(*SessionStore)
+		})
+
+		AfterEach(func() {
+			Expect(store.Client.(*client).Close()).To(Succeed())
+			mr.Close()
+		})
+
+		It("does not mark a missing session as store unavailable", func() {
+			_, err := store.Load(context.Background(), "missing")
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, sessionsapi.ErrStoreUnavailable)).To(BeFalse())
+		})
+
+		It("does not mark a lock held by another request as store unavailable", func() {
+			Expect(store.Lock("key").Obtain(context.Background(), time.Minute)).To(Succeed())
+			err := store.Lock("key").Obtain(context.Background(), time.Minute)
+			Expect(err).To(MatchError(sessionsapi.ErrLockNotObtained))
+			Expect(errors.Is(err, sessionsapi.ErrStoreUnavailable)).To(BeFalse())
+		})
+
+		It("marks every operation as store unavailable when Redis is down", func() {
+			mr.Close()
+			ctx := context.Background()
+
+			_, err := store.Load(ctx, "key")
+			Expect(err).To(MatchError(sessionsapi.ErrStoreUnavailable))
+			Expect(store.Save(ctx, "key", []byte("value"), time.Minute)).To(MatchError(sessionsapi.ErrStoreUnavailable))
+			Expect(store.Clear(ctx, "key")).To(MatchError(sessionsapi.ErrStoreUnavailable))
+			Expect(store.Lock("key").Obtain(ctx, time.Minute)).To(MatchError(sessionsapi.ErrStoreUnavailable))
 		})
 	})
 
