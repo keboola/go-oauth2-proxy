@@ -13,6 +13,7 @@
 - [Sessions without a refresh token are never refreshed or re-validated](https://github.com/keboola/go-oauth2-proxy/commit/409bd0b6f7217ef8a0486ef22149d53faab3622b)
 - [Added option `RedisStoreOptions.Client` to inject a shared Redis client](https://github.com/keboola/go-oauth2-proxy/commit/6d850ae3a819740fa4d741d4d6d99b7343e47f2d)
 - [Session store outages keep the session cookie and call option `OnSessionStoreError`](https://github.com/keboola/go-oauth2-proxy/commit/edbfaa6d79cfb1ec0746086365af541c6d6e98f3)
+- [Refresh lock: 30 s TTL, a refresh ends before the lock expires, a lock-wait timeout keeps the session, options `SessionOptions.RefreshLockDuration` and `RefreshObtainTimeout`](https://github.com/keboola/go-oauth2-proxy/commit/c74f3a928e1f46dcf04f58d8ef4454d288ce7a50)
 
 
 ## Fork maintenance
