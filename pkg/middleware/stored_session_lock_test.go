@@ -69,3 +69,27 @@ func TestRefresh_SlowRefresh_RefreshesOnce(t *testing.T) {
 	assert.True(t, resB.nextCalled)
 	assert.False(t, resB.hookCalled)
 }
+
+func TestRefresh_HungRefresh_EndsBeforeLockExpires(t *testing.T) {
+	r := newRedisSessionTest(t, refreshDueSession(nil))
+	opts := r.loaderOptions(t)
+	opts.RefreshLockDuration = 200 * time.Millisecond
+	refreshErr := make(chan error, 1)
+	var lockExpiresAt time.Time
+	r.store.afterObtain = func() { lockExpiresAt = time.Now().Add(opts.RefreshLockDuration) }
+	opts.RefreshSession = func(ctx context.Context, _ *sessionsapi.SessionState) (bool, error) {
+		<-ctx.Done()
+		refreshErr <- ctx.Err()
+		return false, ctx.Err()
+	}
+
+	go serveStoredSession(t, opts, r.req, true)
+
+	select {
+	case err := <-refreshErr:
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.True(t, time.Now().Before(lockExpiresAt), "the refresh must end before the lock expires")
+	case <-time.After(2 * time.Second):
+		t.Fatal("the refresh was not cancelled")
+	}
+}

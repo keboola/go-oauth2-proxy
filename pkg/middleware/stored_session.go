@@ -64,6 +64,10 @@ type StoredSessionLoaderOptions struct {
 	// How often should sessions be refreshed
 	RefreshPeriod time.Duration
 
+	// Zero values select the defaults.
+	RefreshLockDuration  time.Duration
+	RefreshObtainTimeout time.Duration
+
 	// Provider based session refreshing
 	RefreshSession func(context.Context, *sessionsapi.SessionState) (bool, error)
 
@@ -73,9 +77,6 @@ type StoredSessionLoaderOptions struct {
 	ValidateSession func(context.Context, *sessionsapi.SessionState) bool
 
 	OnSessionStoreError func(http.ResponseWriter, *http.Request, error)
-
-	RefreshLockDuration  time.Duration
-	RefreshObtainTimeout time.Duration
 }
 
 // NewStoredSessionLoader creates a new storedSessionLoader which loads
@@ -86,11 +87,17 @@ func NewStoredSessionLoader(opts *StoredSessionLoaderOptions) alice.Constructor 
 	ss := &storedSessionLoader{
 		store:               opts.SessionStore,
 		refreshPeriod:       opts.RefreshPeriod,
-		sessionRefresher:    opts.RefreshSession,
-		sessionValidator:    opts.ValidateSession,
-		onSessionStoreError: opts.OnSessionStoreError,
 		lockDuration:        opts.RefreshLockDuration,
 		obtainTimeout:       opts.RefreshObtainTimeout,
+		sessionValidator:    opts.ValidateSession,
+		onSessionStoreError: opts.OnSessionStoreError,
+	}
+	ss.sessionRefresher = func(ctx context.Context, session *sessionsapi.SessionState) (bool, error) {
+		// The refresh must end, and its result be saved, before the lock expires,
+		// or a waiting request refreshes again with the same refresh token.
+		ctx, cancel := context.WithTimeout(ctx, ss.refreshLockDuration()*4/5)
+		defer cancel()
+		return opts.RefreshSession(ctx, session)
 	}
 	if ss.onSessionStoreError == nil {
 		ss.onSessionStoreError = func(rw http.ResponseWriter, _ *http.Request, _ error) {
@@ -105,13 +112,12 @@ func NewStoredSessionLoader(opts *StoredSessionLoaderOptions) alice.Constructor 
 type storedSessionLoader struct {
 	store            sessionsapi.SessionStore
 	refreshPeriod    time.Duration
+	lockDuration     time.Duration
+	obtainTimeout    time.Duration
 	sessionRefresher func(context.Context, *sessionsapi.SessionState) (bool, error)
 	sessionValidator func(context.Context, *sessionsapi.SessionState) bool
 
 	onSessionStoreError func(http.ResponseWriter, *http.Request, error)
-
-	lockDuration  time.Duration
-	obtainTimeout time.Duration
 }
 
 // loadSession attempts to load a session as identified by the request cookies.
