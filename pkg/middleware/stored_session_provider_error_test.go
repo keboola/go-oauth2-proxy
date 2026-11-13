@@ -37,6 +37,7 @@ type providerErrorCase struct {
 	withHook     bool
 	cancelReq    bool
 	deadlineReq  bool
+	lockDuration time.Duration
 }
 
 func newProviderErrorTestProvider(t *testing.T, tc providerErrorCase) *providers.OIDCProvider {
@@ -100,6 +101,8 @@ func serveWithProviderError(t *testing.T, tc providerErrorCase) *providerErrorRe
 		SessionStore:   store,
 		RefreshPeriod:  time.Hour,
 		RefreshSession: newProviderErrorTestProvider(t, tc).RefreshSession,
+
+		RefreshLockDuration: tc.lockDuration,
 		ValidateSession: func(context.Context, *sessionsapi.SessionState) bool {
 			res.validatorCalled = true
 			return true
@@ -216,6 +219,25 @@ func TestLoadSession_ProviderFatalError_ClearsCookie(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadSession_ProviderSlowerThanRefreshDeadline_CallsHook(t *testing.T) {
+	res := serveWithProviderError(t, providerErrorCase{
+		tokenHandler: func(_ http.ResponseWriter, r *http.Request) {
+			select {
+			case <-r.Context().Done():
+			case <-time.After(time.Second):
+			}
+		},
+		withHook:     true,
+		lockDuration: 100 * time.Millisecond,
+	})
+
+	assert.True(t, res.hookCalled)
+	assert.ErrorIs(t, res.hookErr, sessionsapi.ErrProviderUnavailable)
+	assert.ErrorIs(t, res.hookErr, context.DeadlineExceeded)
+	assert.Empty(t, providerErrorSetCookies(res.rw))
+	assert.False(t, res.nextCalled)
 }
 
 func TestLoadSession_ProviderPermanentError_ClearsCookie(t *testing.T) {
