@@ -16,16 +16,11 @@ import (
 )
 
 const (
-	// When attempting to obtain the lock, if it's not done before this timeout
-	// then exit and fail the refresh attempt.
-	// TODO: This should probably be configurable by the end user.
-	sessionRefreshObtainTimeout = 5 * time.Second
+	defaultSessionRefreshLockDuration = 30 * time.Second
 
-	// Maximum time allowed for a session refresh attempt.
-	// If the refresh request isn't finished within this time, the lock will be
-	// released.
-	// TODO: This should probably be configurable by the end user.
-	sessionRefreshLockDuration = 2 * time.Second
+	// Added to the lock duration, so a waiter outlives a holder that crashed
+	// and then takes the lock over instead of failing.
+	sessionRefreshObtainMargin = 5 * time.Second
 
 	// How long to wait after failing to obtain the lock before trying again.
 	// TODO: This should probably be configurable by the end user.
@@ -270,14 +265,14 @@ func (s *storedSessionLoader) refreshLockDuration() time.Duration {
 	if s.lockDuration > 0 {
 		return s.lockDuration
 	}
-	return sessionRefreshLockDuration
+	return defaultSessionRefreshLockDuration
 }
 
 func (s *storedSessionLoader) refreshObtainTimeout() time.Duration {
 	if s.obtainTimeout > 0 {
 		return s.obtainTimeout
 	}
-	return sessionRefreshObtainTimeout
+	return s.refreshLockDuration() + sessionRefreshObtainMargin
 }
 
 // needsRefresh determines whether we should attempt to refresh a session or not.
