@@ -42,7 +42,7 @@ func validateSessionCookieMinimal(o *options.Options) []string {
 // validateRedisSessionStore builds a Redis Client from the options and
 // attempts to connect, Set, Get and Del a random health check key
 func validateRedisSessionStore(o *options.Options) []string {
-	if o.Session.Type != options.RedisSessionStoreType {
+	if o.Session.Type != options.RedisSessionStoreType || o.Session.Redis.Client != nil {
 		return []string{}
 	}
 

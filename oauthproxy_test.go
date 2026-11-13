@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/coreos/go-oidc/v3/oidc"
 	middlewareapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/middleware"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
@@ -670,6 +671,51 @@ type enrichSessionErrorProvider struct {
 
 func (p *enrichSessionErrorProvider) EnrichSession(_ context.Context, _ *sessions.SessionState) error {
 	return p.err
+}
+
+func TestCallback_SaveUnavailable_UsesHook(t *testing.T) {
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+
+	var hookErr error
+	opts := baseTestOptions()
+	opts.Cookie.Secure = false
+	opts.Session.Type = options.RedisSessionStoreType
+	opts.Session.Redis.ConnectionURL = "redis://" + mr.Addr()
+	opts.OnSessionStoreError = func(rw http.ResponseWriter, _ *http.Request, err error) {
+		hookErr = err
+		rw.WriteHeader(http.StatusServiceUnavailable)
+	}
+	require.NoError(t, validation.Validate(opts))
+
+	const emailAddress = "michael.bland@gsa.gov"
+	proxy, err := NewOAuthProxy(opts, func(email string) bool { return email == emailAddress })
+	require.NoError(t, err)
+	providerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"access_token": "my_auth_token"}`))
+	}))
+	t.Cleanup(providerServer.Close)
+	providerURL, err := url.Parse(providerServer.URL)
+	require.NoError(t, err)
+	provider := NewTestProvider(providerURL, emailAddress)
+	provider.ValidToken = true
+	proxy.provider = provider
+	mr.Close()
+
+	csrf, err := cookies.NewCSRF(proxy.CookieOptions, "")
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodGet, "/oauth2/callback?code=callback_code&state="+encodeState(csrf.HashOAuthState(), "%2F", false), nil)
+	req = middlewareapi.AddRequestScope(req, &middlewareapi.RequestScope{})
+	csrfCookie, err := csrf.SetCookie(httptest.NewRecorder(), req)
+	require.NoError(t, err)
+	req.AddCookie(csrfCookie)
+
+	rw := httptest.NewRecorder()
+	proxy.OAuthCallback(rw, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rw.Code)
+	assert.ErrorIs(t, hookErr, sessions.ErrStoreUnavailable)
 }
 
 func TestOAuthCallbackSessionErrorStatus(t *testing.T) {

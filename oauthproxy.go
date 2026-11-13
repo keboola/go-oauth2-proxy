@@ -92,6 +92,8 @@ type OAuthProxy struct {
 
 	onNeedsLogin func(rw http.ResponseWriter, req *http.Request) (stop bool)
 
+	onSessionStoreError func(rw http.ResponseWriter, req *http.Request, err error)
+
 	allowedRoutes        []allowedRoute
 	apiRoutes            []apiRoute
 	redirectURL          *url.URL // the url to receive requests at
@@ -246,7 +248,8 @@ func NewOAuthProxyWithPageWriter(opts *options.Options, validator func(string) b
 
 		SignInPath: fmt.Sprintf("%s/sign_in", opts.ProxyPrefix),
 
-		onNeedsLogin: opts.OnNeedsLogin,
+		onNeedsLogin:        opts.OnNeedsLogin,
+		onSessionStoreError: opts.OnSessionStoreError,
 
 		ProxyPrefix:          opts.ProxyPrefix,
 		provider:             provider,
@@ -455,10 +458,11 @@ func buildSessionChain(opts *options.Options, provider providers.Provider, sessi
 	}
 
 	chain = chain.Append(middleware.NewStoredSessionLoader(&middleware.StoredSessionLoaderOptions{
-		SessionStore:    sessionStore,
-		RefreshPeriod:   opts.Cookie.Refresh,
-		RefreshSession:  provider.RefreshSession,
-		ValidateSession: provider.ValidateSession,
+		SessionStore:        sessionStore,
+		RefreshPeriod:       opts.Cookie.Refresh,
+		RefreshSession:      provider.RefreshSession,
+		ValidateSession:     provider.ValidateSession,
+		OnSessionStoreError: opts.OnSessionStoreError,
 
 		OnProviderError: opts.OnProviderError,
 	}))
@@ -590,6 +594,14 @@ func (p *OAuthProxy) SaveSession(rw http.ResponseWriter, req *http.Request, s *s
 
 func (p *OAuthProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	p.serveMux.ServeHTTP(rw, req)
+}
+
+func (p *OAuthProxy) sessionStoreUnavailable(rw http.ResponseWriter, req *http.Request, err error) {
+	if p.onSessionStoreError != nil {
+		p.onSessionStoreError(rw, req, err)
+		return
+	}
+	http.Error(rw, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 }
 
 // ErrorPage writes an error response
@@ -1020,6 +1032,10 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 		err := p.SaveSession(rw, req, session)
 		if err != nil {
 			logger.Errorf("Error saving session state for %s: %v", remoteAddr, err)
+			if errors.Is(err, sessionsapi.ErrStoreUnavailable) {
+				p.sessionStoreUnavailable(rw, req, err)
+				return
+			}
 			p.ErrorPage(rw, req, http.StatusInternalServerError, err.Error())
 			return
 		}

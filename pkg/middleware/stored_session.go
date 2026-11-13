@@ -94,6 +94,8 @@ type StoredSessionLoaderOptions struct {
 	// refresh it, we must re-validate using this validation.
 	ValidateSession func(context.Context, *sessionsapi.SessionState) bool
 
+	OnSessionStoreError func(http.ResponseWriter, *http.Request, error)
+
 	OnProviderError func(http.ResponseWriter, *http.Request, error)
 }
 
@@ -103,12 +105,18 @@ type StoredSessionLoaderOptions struct {
 // If a session was loader by a previous handler, it will not be replaced.
 func NewStoredSessionLoader(opts *StoredSessionLoaderOptions) alice.Constructor {
 	ss := &storedSessionLoader{
-		store:            opts.SessionStore,
-		refreshPeriod:    opts.RefreshPeriod,
-		sessionRefresher: opts.RefreshSession,
-		sessionValidator: opts.ValidateSession,
+		store:               opts.SessionStore,
+		refreshPeriod:       opts.RefreshPeriod,
+		sessionRefresher:    opts.RefreshSession,
+		sessionValidator:    opts.ValidateSession,
+		onSessionStoreError: opts.OnSessionStoreError,
 
 		onProviderError: opts.OnProviderError,
+	}
+	if ss.onSessionStoreError == nil {
+		ss.onSessionStoreError = func(rw http.ResponseWriter, _ *http.Request, _ error) {
+			http.Error(rw, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		}
 	}
 	if ss.onProviderError == nil {
 		ss.onProviderError = func(rw http.ResponseWriter, _ *http.Request, _ error) {
@@ -125,6 +133,8 @@ type storedSessionLoader struct {
 	refreshPeriod    time.Duration
 	sessionRefresher func(context.Context, *sessionsapi.SessionState) (bool, error)
 	sessionValidator func(context.Context, *sessionsapi.SessionState) bool
+
+	onSessionStoreError func(http.ResponseWriter, *http.Request, error)
 
 	onProviderError func(http.ResponseWriter, *http.Request, error)
 }
@@ -144,6 +154,11 @@ func (s *storedSessionLoader) loadSession(next http.Handler) http.Handler {
 		}
 
 		session, err := s.getValidatedSession(rw, req)
+		if errors.Is(err, sessionsapi.ErrStoreUnavailable) {
+			logger.Errorf("Error loading cookied session: %v, keeping session", err)
+			s.onSessionStoreError(rw, req, err)
+			return
+		}
 		if errors.Is(err, sessionsapi.ErrProviderUnavailable) {
 			if errors.Is(req.Context().Err(), context.Canceled) {
 				logger.Errorf("Error loading cookied session: %v, request canceled, keeping session", err)
@@ -206,7 +221,7 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 		default:
 			err := session.ObtainLock(req.Context(), sessionRefreshLockDuration)
 			if err != nil && !errors.Is(err, sessionsapi.ErrLockNotObtained) {
-				return fmt.Errorf("error occurred while trying to obtain lock: %v", err)
+				return fmt.Errorf("error occurred while trying to obtain lock: %w", err)
 			} else if errors.Is(err, sessionsapi.ErrLockNotObtained) {
 				time.Sleep(sessionRefreshRetryPeriod)
 				continue
@@ -230,7 +245,7 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 	// Reload the session in case it was changed underneath us.
 	freshSession, err := s.store.Load(req)
 	if err != nil {
-		return fmt.Errorf("could not load session: %v", err)
+		return fmt.Errorf("could not load session: %w", err)
 	}
 	if freshSession == nil {
 		return errors.New("session no longer exists, it may have been removed by another request")
@@ -253,6 +268,9 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 	// We are holding the lock and the session needs a refresh
 	logger.Printf("Refreshing session - User: %s; SessionAge: %s", session.User, session.Age())
 	if err := s.refreshSession(rw, req, session); err != nil {
+		if errors.Is(err, sessionsapi.ErrStoreUnavailable) {
+			return err
+		}
 		logger.Errorf("Unable to refresh session: %v", err)
 
 		// Check if this is a fatal error that indicates the session is revoked
@@ -324,7 +342,7 @@ func (s *storedSessionLoader) refreshSession(rw http.ResponseWriter, req *http.R
 	err = s.store.Save(rw, req, session)
 	if err != nil {
 		logger.PrintAuthf(session.Email, req, logger.AuthError, "error saving session: %v", err)
-		return fmt.Errorf("error saving session: %v", err)
+		return fmt.Errorf("error saving session: %w", err)
 	}
 	return nil
 }

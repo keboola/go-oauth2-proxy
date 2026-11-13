@@ -54,6 +54,8 @@ type Options struct {
 	// OnNeedsLogin is optional callback, it can be used to implement custom redirect to a login page
 	OnNeedsLogin func(rw http.ResponseWriter, req *http.Request) (stop bool) `cfg:",internal"`
 
+	OnSessionStoreError func(rw http.ResponseWriter, req *http.Request, err error) `cfg:",internal"`
+
 	InjectRequestHeaders  []Header `cfg:",internal"`
 	InjectResponseHeaders []Header `cfg:",internal"`
 
