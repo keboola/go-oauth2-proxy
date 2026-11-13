@@ -8,6 +8,7 @@ import (
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/redis/go-redis/v9"
 )
 
 var _ = Describe("Sessions", func() {
@@ -208,6 +209,26 @@ var _ = Describe("Sessions", func() {
 		opts       *options.Options
 		errStrings []string
 	}
+
+	It("validateRedisSessionStore accepts an injected client without connecting", func() {
+		mr, err := miniredis.Run()
+		Expect(err).ToNot(HaveOccurred())
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		defer client.Close()
+		mr.Close()
+
+		o := &options.Options{
+			Session: options.SessionOptions{
+				Type: options.RedisSessionStoreType,
+				Redis: options.RedisStoreOptions{
+					Client:        client,
+					ConnectionURL: "redis://127.0.0.1:65535",
+				},
+			},
+		}
+		Expect(validateRedisSessionStore(o)).To(BeEmpty())
+		Expect(client.PoolStats().TotalConns).To(BeZero())
+	})
 
 	DescribeTable("validateRedisSessionStore",
 		func(o *redisStoreTableInput) {

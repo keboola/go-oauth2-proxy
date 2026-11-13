@@ -24,6 +24,10 @@ type SessionStore struct {
 // NewRedisSessionStore initialises a new instance of the SessionStore and wraps
 // it in a persistence.Manager
 func NewRedisSessionStore(opts *options.SessionOptions, cookieOpts *options.Cookie) (sessions.SessionStore, error) {
+	if opts.Redis.Client != nil {
+		return persistence.NewManager(&SessionStore{Client: newClient(opts.Redis.Client)}, cookieOpts), nil
+	}
+
 	client, err := NewRedisClient(opts.Redis)
 	if err != nil {
 		return nil, fmt.Errorf("error constructing redis client: %v", err)
