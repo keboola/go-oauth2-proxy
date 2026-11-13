@@ -55,6 +55,7 @@ func TestRefresh_SlowRefresh_RefreshesOnce(t *testing.T) {
 			select {
 			case <-waiting:
 			case <-time.After(2 * time.Second):
+				t.Error("the second request did not wait for the lock")
 			}
 		}
 		s.RefreshToken = "rotated-refresh-token"
@@ -83,7 +84,12 @@ func TestRefresh_HungRefresh_EndsBeforeLockExpires(t *testing.T) {
 		return false, ctx.Err()
 	}
 
-	go serveStoredSession(t, opts, r.req, true)
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		serveStoredSession(t, opts, r.req, true)
+	}()
+	defer func() { <-served }()
 
 	select {
 	case err := <-refreshErr:
