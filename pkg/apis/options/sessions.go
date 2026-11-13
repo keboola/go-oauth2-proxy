@@ -12,7 +12,9 @@ type SessionOptions struct {
 	Cookie CookieStoreOptions `cfg:",squash"`
 	Redis  RedisStoreOptions  `cfg:",squash"`
 
-	RefreshLockDuration  time.Duration `cfg:",internal"`
+	RefreshLockDuration time.Duration `cfg:",internal"`
+	// Below RefreshLockDuration, requests waiting for a crashed holder's lock
+	// answer 503 until the lock expires, instead of taking it over.
 	RefreshObtainTimeout time.Duration `cfg:",internal"`
 }
 
