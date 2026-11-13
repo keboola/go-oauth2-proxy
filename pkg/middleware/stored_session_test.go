@@ -504,6 +504,7 @@ var _ = Describe("Stored Session Suite", func() {
 				s := &storedSessionLoader{
 					refreshPeriod: in.refreshPeriod,
 					store:         store,
+					obtainTimeout: 100 * time.Millisecond,
 					sessionRefresher: func(_ context.Context, ss *sessionsapi.SessionState) (bool, error) {
 						refreshed = true
 						switch ss.RefreshToken {
@@ -612,7 +613,7 @@ var _ = Describe("Stored Session Suite", func() {
 						obtainError: sessionsapi.ErrLockNotObtained,
 					},
 				},
-				expectedErr:          errors.New("timeout obtaining session lock"),
+				expectedErr:          sessionsapi.ErrStoreUnavailable,
 				expectRefreshed:      false,
 				expectValidated:      false,
 				expectedLockObtained: true,

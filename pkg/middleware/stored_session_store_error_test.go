@@ -161,8 +161,9 @@ func TestOnSessionStoreError_HookCalled(t *testing.T) {
 
 type realStore struct {
 	persistence.Store
-	afterFirstLoad func()
-	afterObtain    func()
+	afterFirstLoad   func()
+	afterObtain      func()
+	afterNotObtained func()
 }
 
 func (s *realStore) Load(ctx context.Context, key string) ([]byte, error) {
@@ -175,18 +176,22 @@ func (s *realStore) Load(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (s *realStore) Lock(key string) sessionsapi.Lock {
-	return &realLock{Lock: s.Store.Lock(key), afterObtain: s.afterObtain}
+	return &realLock{Lock: s.Store.Lock(key), afterObtain: s.afterObtain, afterNotObtained: s.afterNotObtained}
 }
 
 type realLock struct {
 	sessionsapi.Lock
-	afterObtain func()
+	afterObtain      func()
+	afterNotObtained func()
 }
 
 func (l *realLock) Obtain(ctx context.Context, expiration time.Duration) error {
 	err := l.Lock.Obtain(ctx, expiration)
 	if err == nil && l.afterObtain != nil {
 		l.afterObtain()
+	}
+	if errors.Is(err, sessionsapi.ErrLockNotObtained) && l.afterNotObtained != nil {
+		l.afterNotObtained()
 	}
 	return err
 }

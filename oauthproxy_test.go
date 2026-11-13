@@ -4726,3 +4726,49 @@ func TestOAuthCallbackCSRFFailureLogsNoSecrets(t *testing.T) {
 		})
 	}
 }
+
+func TestRefreshLockWait_UsesSessionOptions(t *testing.T) {
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+
+	var hookErr error
+	opts := baseTestOptions()
+	opts.Cookie.Secure = false
+	opts.Cookie.Refresh = time.Hour
+	opts.Session.Type = options.RedisSessionStoreType
+	opts.Session.Redis.ConnectionURL = "redis://" + mr.Addr()
+	opts.Session.RefreshLockDuration = 50 * time.Millisecond
+	opts.Session.RefreshObtainTimeout = 50 * time.Millisecond
+	opts.OnSessionStoreError = func(rw http.ResponseWriter, _ *http.Request, err error) {
+		hookErr = err
+		rw.WriteHeader(http.StatusServiceUnavailable)
+	}
+	require.NoError(t, validation.Validate(opts))
+	proxy, err := NewOAuthProxy(opts, func(string) bool { return true })
+	require.NoError(t, err)
+
+	created := time.Now().Add(-2 * time.Hour)
+	expires := time.Now().Add(time.Hour)
+	saveRW := httptest.NewRecorder()
+	require.NoError(t, proxy.sessionStore.Save(saveRW, httptest.NewRequest(http.MethodGet, "/", nil), &sessions.SessionState{
+		Email:        "user@example.com",
+		RefreshToken: "refresh-token",
+		CreatedAt:    &created,
+		ExpiresOn:    &expires,
+	}))
+	require.Len(t, mr.Keys(), 1)
+	require.NoError(t, mr.Set(mr.Keys()[0]+".lock", "held-by-another-request"))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	for _, c := range saveRW.Result().Cookies() {
+		req.AddCookie(c)
+	}
+
+	rw := httptest.NewRecorder()
+	start := time.Now()
+	proxy.ServeHTTP(rw, req)
+
+	assert.Less(t, time.Since(start), time.Second)
+	assert.Equal(t, http.StatusServiceUnavailable, rw.Code)
+	assert.ErrorIs(t, hookErr, sessions.ErrStoreUnavailable)
+}
