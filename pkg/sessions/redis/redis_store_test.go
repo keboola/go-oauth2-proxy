@@ -14,6 +14,7 @@ import (
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/sessions/tests"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -245,6 +246,78 @@ var _ = Describe("Redis SessionStore Tests", func() {
 					},
 				)
 			})
+		})
+	})
+
+	Describe("Redis SessionStore with an injected client", func() {
+		var mr *miniredis.Miniredis
+		var injected *redis.Client
+
+		BeforeEach(func() {
+			var err error
+			mr, err = miniredis.Run()
+			Expect(err).ToNot(HaveOccurred())
+			injected = redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		})
+
+		AfterEach(func() {
+			Expect(injected.Close()).To(Succeed())
+			mr.Close()
+		})
+
+		tests.RunSessionStoreTests(
+			func(opts *options.SessionOptions, cookieOpts *options.Cookie) (sessionsapi.SessionStore, error) {
+				opts.Type = options.RedisSessionStoreType
+				opts.Redis.Client = injected
+				return NewRedisSessionStore(opts, cookieOpts)
+			},
+			func(d time.Duration) error {
+				mr.FastForward(d)
+				return nil
+			},
+		)
+
+		It("stores sessions through the injected client and ignores the connection URLs", func() {
+			opts := &options.SessionOptions{
+				Type: options.RedisSessionStoreType,
+				Redis: options.RedisStoreOptions{
+					Client:        injected,
+					ConnectionURL: "redis://127.0.0.1:65535",
+				},
+			}
+			ss, err := NewRedisSessionStore(opts, &options.Cookie{})
+			Expect(err).ToNot(HaveOccurred())
+
+			store := ss.(*persistence.Manager).Store
+			Expect(store.Save(context.Background(), "key", []byte("value"), time.Minute)).To(Succeed())
+			value, err := store.Load(context.Background(), "key")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(value).To(Equal([]byte("value")))
+			Expect(mr.Keys()).To(ConsistOf("key"))
+		})
+
+		It("opens no new connections when many stores share the injected client", func() {
+			opts := &options.SessionOptions{
+				Type:  options.RedisSessionStoreType,
+				Redis: options.RedisStoreOptions{Client: injected},
+			}
+			save := func(i int) {
+				ss, err := NewRedisSessionStore(opts, &options.Cookie{})
+				Expect(err).ToNot(HaveOccurred())
+				key := fmt.Sprintf("key-%d", i)
+				Expect(ss.(*persistence.Manager).Store.Save(context.Background(), key, []byte("value"), time.Minute)).To(Succeed())
+			}
+
+			save(0)
+			usesAfterFirstSave := injected.PoolStats().Hits + injected.PoolStats().Misses
+			connsAfterFirstSave := injected.PoolStats().TotalConns
+			Expect(connsAfterFirstSave).To(BeNumerically(">", 0))
+			for i := 1; i < 100; i++ {
+				save(i)
+			}
+			Expect(injected.PoolStats().Hits + injected.PoolStats().Misses).To(BeNumerically(">=", usesAfterFirstSave+99))
+			Expect(injected.PoolStats().TotalConns).To(BeNumerically("<=", connsAfterFirstSave))
+			Expect(mr.Keys()).To(HaveLen(100))
 		})
 	})
 
