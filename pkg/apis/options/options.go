@@ -49,6 +49,8 @@ type Options struct {
 	UpstreamServers UpstreamConfig `cfg:",internal"`
 	UpstreamChain   alice.Chain    `cfg:",internal"`
 
+	OnProviderError func(rw http.ResponseWriter, req *http.Request, err error) `cfg:",internal"`
+
 	// OnNeedsLogin is optional callback, it can be used to implement custom redirect to a login page
 	OnNeedsLogin func(rw http.ResponseWriter, req *http.Request) (stop bool) `cfg:",internal"`
 

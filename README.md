@@ -14,6 +14,7 @@
 - [Added option `RedisStoreOptions.Client` to inject a shared Redis client](https://github.com/keboola/go-oauth2-proxy/commit/6d850ae3a819740fa4d741d4d6d99b7343e47f2d)
 - [Session store outages keep the session cookie and call option `OnSessionStoreError`](https://github.com/keboola/go-oauth2-proxy/commit/edbfaa6d79cfb1ec0746086365af541c6d6e98f3)
 - [Refresh lock: 30 s TTL, a refresh ends before the lock expires, a lock-wait timeout keeps the session, options `SessionOptions.RefreshLockDuration` and `RefreshObtainTimeout`](https://github.com/keboola/go-oauth2-proxy/commit/c74f3a928e1f46dcf04f58d8ef4454d288ce7a50)
+- [An unavailable IdP during a session refresh keeps the session cookie and calls option `OnProviderError`](https://github.com/keboola/go-oauth2-proxy/commit/c9e1160d90407117db71002497279e743fd0799e)
 
 
 ## Fork maintenance

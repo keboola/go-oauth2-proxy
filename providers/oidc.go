@@ -152,7 +152,7 @@ func (p *OIDCProvider) RefreshSession(ctx context.Context, s *sessions.SessionSt
 	ctx = oidc.ClientContext(ctx, requests.DefaultHTTPClient)
 	err := p.redeemRefreshToken(ctx, s)
 	if err != nil {
-		return false, fmt.Errorf("unable to redeem refresh token: %v", err)
+		return false, fmt.Errorf("unable to redeem refresh token: %w", err)
 	}
 
 	return true, nil
@@ -180,7 +180,7 @@ func (p *OIDCProvider) redeemRefreshToken(ctx context.Context, s *sessions.Sessi
 	}
 	token, err := c.TokenSource(ctx, t).Token()
 	if err != nil {
-		return fmt.Errorf("failed to get token: %v", err)
+		return fmt.Errorf("failed to get token: %w", err)
 	}
 
 	newSession, err := p.createSession(ctx, token, true)
