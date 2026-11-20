@@ -7,6 +7,7 @@ import (
 
 	"github.com/justinas/alice"
 	ipapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/ip"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
 	internaloidc "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/providers/oidc"
 	"github.com/spf13/pflag"
 )
@@ -55,6 +56,10 @@ type Options struct {
 	OnNeedsLogin func(rw http.ResponseWriter, req *http.Request) (stop bool) `cfg:",internal"`
 
 	OnSessionStoreError func(rw http.ResponseWriter, req *http.Request, err error) `cfg:",internal"`
+
+	// OnAccessDenied replaces the error page for a session that fails authorization, at the OAuth callback and on a proxied request.
+	// The session is not saved; on a proxied request its cookie is already cleared.
+	OnAccessDenied func(rw http.ResponseWriter, req *http.Request, session *sessions.SessionState) `cfg:",internal"`
 
 	InjectRequestHeaders  []Header `cfg:",internal"`
 	InjectResponseHeaders []Header `cfg:",internal"`
