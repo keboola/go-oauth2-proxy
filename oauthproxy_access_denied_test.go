@@ -70,6 +70,17 @@ func assertNoSessionCookie(t *testing.T, rw *httptest.ResponseRecorder, cookieNa
 	}
 }
 
+func requireClearedSessionCookie(t *testing.T, rw *httptest.ResponseRecorder, cookieName string) {
+	t.Helper()
+	for _, c := range rw.Result().Cookies() {
+		if c.Name == cookieName {
+			assert.True(t, c.MaxAge < 0 || (!c.Expires.IsZero() && c.Expires.Before(time.Now())), "session cookie %q must be cleared", c.Name)
+			return
+		}
+	}
+	t.Fatalf("session cookie %q not cleared", cookieName)
+}
+
 func TestCallback_AccessDenied_UsesHook(t *testing.T) {
 	var hookSession *sessions.SessionState
 	opts := baseTestOptions()
@@ -131,7 +142,49 @@ func TestProxy_AccessDenied_UsesHook(t *testing.T) {
 	require.NotNil(t, hookSession)
 	assert.Equal(t, accessDeniedEmail, hookSession.Email)
 	assert.Equal(t, []string{"other"}, hookSession.Groups)
-	assertNoSessionCookie(t, test.rw, test.opts.Cookie.Name)
+	requireClearedSessionCookie(t, test.rw, test.opts.Cookie.Name)
+}
+
+func TestProxy_AccessDenied_NoHook(t *testing.T) {
+	test := deniedSessionTest(t, func(*options.Options) {})
+
+	test.proxy.ServeHTTP(test.rw, test.req)
+
+	assert.Equal(t, http.StatusForbidden, test.rw.Code)
+	assert.Contains(t, test.rw.Body.String(), "<html")
+	requireClearedSessionCookie(t, test.rw, test.opts.Cookie.Name)
+}
+
+func TestAccessDenied_OtherEndpoints_SkipHook(t *testing.T) {
+	for _, path := range []string{"/oauth2/auth", "/oauth2/userinfo", "/oauth2/sign_out"} {
+		t.Run(path, func(t *testing.T) {
+			test := deniedSessionTest(t, func(opts *options.Options) {
+				opts.OnAccessDenied = func(http.ResponseWriter, *http.Request, *sessions.SessionState) {
+					t.Error("hook must not run")
+				}
+			})
+			test.req.URL.Path = path
+
+			test.proxy.ServeHTTP(test.rw, test.req)
+
+			assert.NotEqual(t, http.StatusOK, test.rw.Code)
+		})
+	}
+}
+
+func TestCallback_AccessDenied_ForceJSONErrors_UsesHook(t *testing.T) {
+	called := false
+	opts := baseTestOptions()
+	opts.ForceJSONErrors = true
+	opts.OnAccessDenied = func(rw http.ResponseWriter, _ *http.Request, _ *sessions.SessionState) {
+		called = true
+		rw.WriteHeader(http.StatusTeapot)
+	}
+
+	rw := deniedCallback(t, opts)
+
+	assert.True(t, called)
+	assert.Equal(t, http.StatusTeapot, rw.Code)
 }
 
 func TestProxy_AccessDenied_ForceJSONErrors_SkipsHook(t *testing.T) {
