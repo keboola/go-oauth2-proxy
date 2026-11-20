@@ -57,8 +57,9 @@ type Options struct {
 
 	OnSessionStoreError func(rw http.ResponseWriter, req *http.Request, err error) `cfg:",internal"`
 
-	// OnAccessDenied replaces the error page for a session that fails authorization, at the OAuth callback and on a proxied request.
-	// The session is not saved; on a proxied request its cookie is already cleared.
+	// OnAccessDenied replaces the error page for a session refused by the email validator or by Authorize,
+	// at the OAuth callback and on a proxied request. The session is not saved; on a proxied request its cookie is already cleared.
+	// ForceJSONErrors wins on a proxied request only: the OAuth callback calls the hook either way.
 	OnAccessDenied func(rw http.ResponseWriter, req *http.Request, session *sessions.SessionState) `cfg:",internal"`
 
 	InjectRequestHeaders  []Header `cfg:",internal"`
