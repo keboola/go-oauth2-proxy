@@ -93,6 +93,7 @@ type OAuthProxy struct {
 	onNeedsLogin func(rw http.ResponseWriter, req *http.Request) (stop bool)
 
 	onSessionStoreError func(rw http.ResponseWriter, req *http.Request, err error)
+	onAccessDenied      func(rw http.ResponseWriter, req *http.Request, session *sessionsapi.SessionState)
 
 	allowedRoutes        []allowedRoute
 	apiRoutes            []apiRoute
@@ -250,6 +251,7 @@ func NewOAuthProxyWithPageWriter(opts *options.Options, validator func(string) b
 
 		onNeedsLogin:        opts.OnNeedsLogin,
 		onSessionStoreError: opts.OnSessionStoreError,
+		onAccessDenied:      opts.OnAccessDenied,
 
 		ProxyPrefix:          opts.ProxyPrefix,
 		provider:             provider,
@@ -1046,6 +1048,10 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 		http.Redirect(rw, req, appRedirect, http.StatusFound)
 	} else {
 		logger.PrintAuthf(session.Email, req, logger.AuthFailure, "Invalid authentication via OAuth2: unauthorized")
+		if p.onAccessDenied != nil {
+			p.onAccessDenied(rw, req, session)
+			return
+		}
 		p.ErrorPage(rw, req, http.StatusForbidden, "Invalid session: unauthorized")
 	}
 }
@@ -1162,9 +1168,12 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 		}
 
 	case ErrAccessDenied:
-		if p.forceJSONErrors {
+		switch {
+		case p.forceJSONErrors:
 			p.errorJSON(rw, http.StatusForbidden)
-		} else {
+		case p.onAccessDenied != nil:
+			p.onAccessDenied(rw, req, middlewareapi.GetRequestScope(req).Session)
+		default:
 			p.ErrorPage(rw, req, http.StatusForbidden, "The session failed authorization checks")
 		}
 
